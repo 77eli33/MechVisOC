@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MechVis</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Mechanismus visualisieren</h1>
+  </header>
+
+  <main>
+    <section class="panel" id="edukte-panel">
+      <h2>Edukte:</h2>
+      <div class="molecule-row" id="edukte-row">
+        <div class="molecule-slot"></div>
+        <div class="molecule-slot">
+          <button class="add-btn" title="Molekül hinzufügen">+</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="arrow">&#8594;</div>
+
+    <section class="panel" id="produkte-panel">
+      <div class="molecule-row" id="produkte-row"></div>
+    </section>
+  </main>
+</body>
+<script src="app.js"></script>
+</html>
