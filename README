@@ -1,0 +1,3 @@
+The project is still in a very early development/experimental stage. 
+
+The goal is to build a small Visualization Tool for Organic Chemistry Reaction types. The Program is suppposed to visualize Electron and Atom movements for given Reactants and Products with a selected Reaction Mechanism. It should just be a helpful tool for students to better visualize what is happening during the Reaction. The tool is not supposed to be taken as a source of truth for studying these topics, knowledge in the field is required to validate the Program's Output.
