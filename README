@@ -5,6 +5,28 @@ The goal is to build a small visualization tool for organic chemistry reaction t
 Development
 -----------
 
+### One-click start in VS Code
+
+1. Open the repository folder in VS Code.
+2. Open **Run and Debug** from the left sidebar.
+3. Choose **MechVis: Start App** and press the green play button.
+
+The first launch installs any missing dependencies. It then starts the frontend and backend together and opens the app in the default browser. Stop both services with the red stop button in VS Code.
+
+Choose **MechVis: Run Checks** from the same menu to run the backend tests and frontend production build.
+
+### Terminal start
+
+The same launcher can be used outside VS Code:
+
+    ./scripts/mechvis.sh start --open
+
+Run all checks with:
+
+    ./scripts/mechvis.sh check
+
+### Manual start
+
 Install the backend dependencies:
 
     .venv/bin/python -m pip install -r src/backend/requirements-dev.txt
