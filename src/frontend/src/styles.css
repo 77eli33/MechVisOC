@@ -48,10 +48,21 @@ button {
 .shader-background {
   position: fixed;
   z-index: -2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: -3%;
+  width: 106%;
+  height: 106%;
   background: linear-gradient(125deg, #becbd4, #1e565a);
+  animation: background-drift 34s ease-in-out infinite alternate;
+  will-change: transform;
+}
+
+@keyframes background-drift {
+  from {
+    transform: translate3d(-0.8%, -0.55%, 0) scale(1.01);
+  }
+  to {
+    transform: translate3d(0.85%, 0.65%, 0) scale(1.035);
+  }
 }
 
 .glass-panel,
@@ -449,12 +460,36 @@ button {
   background: rgba(30, 44, 47, 0.18);
   backdrop-filter: blur(7px) saturate(0.84);
   -webkit-backdrop-filter: blur(7px) saturate(0.84);
-  animation: editor-in 180ms ease-out both;
+  animation: editor-in 160ms ease-out both;
 }
 
 @keyframes editor-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@keyframes editor-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes editor-dialog-in {
+  from { transform: translateY(0.45rem) scale(0.993); }
+  to { transform: translateY(0) scale(1); }
+}
+
+@keyframes editor-dialog-out {
+  from { transform: translateY(0) scale(1); }
+  to { transform: translateY(0.3rem) scale(0.995); }
+}
+
+.editor-backdrop--closing {
+  pointer-events: none;
+  animation: editor-out 150ms ease-in both;
+}
+
+.editor-backdrop--closing .editor-dialog {
+  animation: editor-dialog-out 150ms ease-in both;
 }
 
 .editor-dialog {
@@ -468,6 +503,7 @@ button {
   box-shadow: 0 28px 100px rgba(7, 21, 23, 0.27), inset 0 1px rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(25px) saturate(0.78);
   -webkit-backdrop-filter: blur(25px) saturate(0.78);
+  animation: editor-dialog-in 160ms ease-out both;
 }
 
 .editor-heading,
@@ -778,6 +814,14 @@ button {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .shader-background {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    animation: none;
+    transform: none;
+  }
+
   * {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;

@@ -414,8 +414,23 @@ function MoleculeEditor({
   const [selectedAtomId, setSelectedAtomId] = useState<string | null>(initialMolecule?.atoms[0]?.id ?? null);
   const [pendingAtom, setPendingAtom] = useState<PendingAtom | null>(null);
   const [symbol, setSymbol] = useState("");
+  const [isClosing, setIsClosing] = useState(false);
   const symbolInputRef = useRef<HTMLInputElement>(null);
+  const closeTimerRef = useRef<number | null>(null);
   const selectedAtom = atoms.find((atom) => atom.id === selectedAtomId);
+
+  const beginClose = useCallback((afterClose?: () => void) => {
+    if (isClosing) return;
+    setIsClosing(true);
+    closeTimerRef.current = window.setTimeout(() => {
+      if (afterClose) afterClose();
+      else onClose();
+    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+  }, [isClosing, onClose]);
+
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   useEffect(() => {
     symbolInputRef.current?.focus();
@@ -428,12 +443,12 @@ function MoleculeEditor({
         setPendingAtom(null);
         setSymbol("");
       } else {
-        onClose();
+        beginClose();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose, pendingAtom]);
+  }, [beginClose, pendingAtom]);
 
   const isOccupied = (x: number, y: number) => atoms.some((atom) => atom.x === x && atom.y === y);
   const startAtom = (candidate: PendingAtom) => {
@@ -461,18 +476,18 @@ function MoleculeEditor({
       formula: composition,
       charge: initialMolecule?.charge ?? 0,
     };
-    onSave(molecule);
+    beginClose(() => onSave(molecule));
   };
 
   return (
-    <div className="editor-backdrop" role="presentation">
+    <div className={`editor-backdrop${isClosing ? " editor-backdrop--closing" : ""}`} role="presentation">
       <section className="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
         <header className="editor-heading">
           <div>
             <p>{destination === "reactants" ? "Reactants" : "Products"}</p>
             <h2 id="editor-title">{initialMolecule ? "Edit Molecule" : "Molecule Editor"}</h2>
           </div>
-          <button className="icon-button" type="button" aria-label="Close molecule editor" onClick={onClose}>
+          <button className="icon-button" type="button" aria-label="Close molecule editor" onClick={() => beginClose()}>
             <CloseIcon />
           </button>
         </header>
