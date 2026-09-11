@@ -425,7 +425,7 @@ function MoleculeEditor({
     closeTimerRef.current = window.setTimeout(() => {
       if (afterClose) afterClose();
       else onClose();
-    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 150);
+    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 220);
   }, [isClosing, onClose]);
 
   useEffect(() => () => {

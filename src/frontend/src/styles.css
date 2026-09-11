@@ -457,39 +457,76 @@ button {
   display: grid;
   place-items: center;
   padding: clamp(0.6rem, 2vw, 1.2rem);
-  background: rgba(30, 44, 47, 0.18);
-  backdrop-filter: blur(7px) saturate(0.84);
-  -webkit-backdrop-filter: blur(7px) saturate(0.84);
-  animation: editor-in 160ms ease-out both;
+  background: rgba(20, 34, 37, 0.3);
+  backdrop-filter: blur(13px) saturate(0.76);
+  -webkit-backdrop-filter: blur(13px) saturate(0.76);
+  animation: editor-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: opacity, backdrop-filter, background-color;
 }
 
 @keyframes editor-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+    background: rgba(20, 34, 37, 0);
+    backdrop-filter: blur(0) saturate(1);
+    -webkit-backdrop-filter: blur(0) saturate(1);
+  }
+  to {
+    opacity: 1;
+    background: rgba(20, 34, 37, 0.3);
+    backdrop-filter: blur(13px) saturate(0.76);
+    -webkit-backdrop-filter: blur(13px) saturate(0.76);
+  }
 }
 
 @keyframes editor-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+    background: rgba(20, 34, 37, 0.3);
+    backdrop-filter: blur(13px) saturate(0.76);
+    -webkit-backdrop-filter: blur(13px) saturate(0.76);
+  }
+  to {
+    opacity: 0;
+    background: rgba(20, 34, 37, 0);
+    backdrop-filter: blur(0) saturate(1);
+    -webkit-backdrop-filter: blur(0) saturate(1);
+  }
 }
 
 @keyframes editor-dialog-in {
-  from { transform: translateY(0.45rem) scale(0.993); }
-  to { transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    filter: blur(9px);
+    transform: translateY(1.35rem) scale(0.945);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
 }
 
 @keyframes editor-dialog-out {
-  from { transform: translateY(0) scale(1); }
-  to { transform: translateY(0.3rem) scale(0.995); }
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    filter: blur(7px);
+    transform: translateY(0.9rem) scale(0.955);
+  }
 }
 
 .editor-backdrop--closing {
   pointer-events: none;
-  animation: editor-out 150ms ease-in both;
+  animation: editor-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .editor-backdrop--closing .editor-dialog {
-  animation: editor-dialog-out 150ms ease-in both;
+  animation: editor-dialog-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 .editor-dialog {
@@ -503,7 +540,9 @@ button {
   box-shadow: 0 28px 100px rgba(7, 21, 23, 0.27), inset 0 1px rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(25px) saturate(0.78);
   -webkit-backdrop-filter: blur(25px) saturate(0.78);
-  animation: editor-dialog-in 160ms ease-out both;
+  animation: editor-dialog-in 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: 50% 48%;
+  will-change: transform, opacity, filter;
 }
 
 .editor-heading,
