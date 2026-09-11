@@ -1,5 +1,5 @@
 from src.backend.chemistry.mapping import map_atoms, sort_atoms_into_buckets, validate_reaction
-from src.backend.chemistry.model import Atom, AtomRef, Molecule, Products, Reactants
+from src.backend.chemistry.model import Atom, AtomRef, Bond, Molecule, Products, Reactants
 
 
 def molecule(molecule_id: str, *elements: str) -> Molecule:
@@ -39,12 +39,43 @@ def test_sort_atoms_into_buckets_keeps_molecule_and_atom_ids() -> None:
     ]
 
 
-def test_map_atoms_only_maps_singleton_element_buckets() -> None:
+def test_map_atoms_maps_repeated_elements_one_to_one() -> None:
     reactants = Reactants([molecule("reactant", "C", "C", "O")])
     products = Products([molecule("product", "C", "O", "C")])
 
     mappings = map_atoms(reactants, products)
 
     assert mappings == {
+        AtomRef("reactant", "reactant-0"): AtomRef("product", "product-0"),
+        AtomRef("reactant", "reactant-1"): AtomRef("product", "product-2"),
         AtomRef("reactant", "reactant-2"): AtomRef("product", "product-1"),
+    }
+
+
+def test_map_atoms_uses_bond_environment_for_reordered_atoms() -> None:
+    reactant = Molecule(
+        molecule_id="reactant",
+        name="ethanol skeleton",
+        atoms=[Atom("terminal-c", "C"), Atom("middle-c", "C"), Atom("oxygen", "O")],
+        bonds=[
+            Bond("terminal-c", "middle-c"),
+            Bond("middle-c", "oxygen"),
+        ],
+    )
+    product = Molecule(
+        molecule_id="product",
+        name="same skeleton, reordered",
+        atoms=[Atom("product-o", "O"), Atom("product-middle", "C"), Atom("product-terminal", "C")],
+        bonds=[
+            Bond("product-o", "product-middle"),
+            Bond("product-middle", "product-terminal"),
+        ],
+    )
+
+    mappings = map_atoms(Reactants([reactant]), Products([product]))
+
+    assert mappings == {
+        AtomRef("reactant", "terminal-c"): AtomRef("product", "product-terminal"),
+        AtomRef("reactant", "middle-c"): AtomRef("product", "product-middle"),
+        AtomRef("reactant", "oxygen"): AtomRef("product", "product-o"),
     }

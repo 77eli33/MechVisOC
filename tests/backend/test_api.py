@@ -205,3 +205,21 @@ def test_atom_mapping_rejects_reaction_with_different_atoms() -> None:
     assert response.json() == {
         "detail": "Invalid Reaction: reactants and products must contain exactly the same atoms."
     }
+
+
+def test_atom_mapping_reports_invalid_rdkit_input_as_validation_error() -> None:
+    molecule = {
+        "id": "invalid-molecule",
+        "atoms": [{"id": "unknown", "element": "Xx", "x": 0, "y": 0}],
+    }
+
+    response = client.post(
+        "/api/atom-mapping",
+        json={
+            "reactants": {"molecules": [molecule]},
+            "products": {"molecules": [molecule]},
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Unknown element symbol 'Xx'"}

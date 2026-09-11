@@ -70,7 +70,10 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
             status_code=422,
             detail="Invalid Reaction: reactants and products must contain exactly the same atoms.",
         )
-    mappings = map_atoms(reactants, products)
+    try:
+        mappings = map_atoms(reactants, products)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
     return AtomMappingResponse(
         reactants=request.reactants,
         products=request.products,
