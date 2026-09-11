@@ -73,6 +73,11 @@ class BucketPayload(BaseModel):
     atoms: List[BucketAtomPayload]
 
 
+class AtomMappingPayload(BaseModel):
+    reactant: BucketAtomPayload
+    product: BucketAtomPayload
+
+
 class AtomMappingResponse(BaseModel):
     reactants: ReactantsPayload
     products: ProductsPayload
@@ -80,6 +85,7 @@ class AtomMappingResponse(BaseModel):
     product_count: int
     reactant_buckets: List[BucketPayload]
     product_buckets: List[BucketPayload]
+    atom_mappings: List[AtomMappingPayload]
 
 
 def to_domain_molecule(payload: MoleculePayload) -> Molecule:

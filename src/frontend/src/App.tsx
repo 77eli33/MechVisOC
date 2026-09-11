@@ -14,7 +14,12 @@ type Molecule = {
 };
 type BucketAtom = { molecule_id: string; atom_id: string };
 type AtomBucket = { element_name: string; atoms: BucketAtom[] };
-type AtomMappingResult = { reactant_buckets: AtomBucket[]; product_buckets: AtomBucket[] };
+type AtomMapping = { reactant: BucketAtom; product: BucketAtom };
+type AtomMappingResult = {
+  reactant_buckets: AtomBucket[];
+  product_buckets: AtomBucket[];
+  atom_mappings: AtomMapping[];
+};
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string };
 type ChargeMenuState = { side: Side; moleculeId: string; x: number; y: number };
@@ -417,35 +422,33 @@ function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
   );
 }
 
-function BucketsPanel({ buckets }: { buckets: AtomMappingResult }) {
-  const sides: Array<{ title: string; buckets: AtomBucket[] }> = [
-    { title: "Reactants", buckets: buckets.reactant_buckets },
-    { title: "Products", buckets: buckets.product_buckets },
-  ];
+function AtomMappingsPanel({ mappings, molecules }: { mappings: AtomMapping[]; molecules: Record<Side, Molecule[]> }) {
+  const atomSymbols = new Map(
+    [...molecules.reactants, ...molecules.products].flatMap((molecule) =>
+      molecule.atoms.map((atom) => [`${molecule.id}:${atom.id}`, atom.symbol] as const),
+    ),
+  );
+  const atomSymbol = (atom: BucketAtom) => atomSymbols.get(`${atom.molecule_id}:${atom.atom_id}`) ?? "?";
   return (
-    <section className="molecule-panel buckets-panel" aria-labelledby="buckets-title">
+    <section className="molecule-panel buckets-panel" aria-labelledby="mappings-title">
       <header className="panel-heading">
-        <h2 id="buckets-title">Atom buckets</h2>
-        <span>Grouped by element</span>
+        <h2 id="mappings-title">Atom mappings</h2>
+        <span>{mappings.length} {mappings.length === 1 ? "atom" : "atoms"} mapped</span>
       </header>
-      <div className="bucket-sides">
-        {sides.map((side) => (
-          <div className="bucket-side" key={side.title}>
-            <h3>{side.title}</h3>
-            {side.buckets.length === 0 ? <p>No atoms</p> : side.buckets.map((bucket) => (
-              <div className="atom-bucket" key={bucket.element_name}>
-                <h4>{bucket.element_name}</h4>
-                <ul>
-                  {bucket.atoms.map((atom) => (
-                    <li key={`${atom.molecule_id}:${atom.atom_id}`}>
-                      <code>{atom.molecule_id}</code>
-                      <span> / </span>
-                      <code>{atom.atom_id}</code>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+      <div className="mapping-list">
+        {mappings.length === 0 ? <p>No atoms can be mapped unambiguously yet.</p> : mappings.map((mapping) => (
+          <div className="mapping-row" key={`${mapping.reactant.molecule_id}:${mapping.reactant.atom_id}`}>
+            <span className="mapping-atom">
+              <strong>{atomSymbol(mapping.reactant)}</strong>
+              <code>{mapping.reactant.molecule_id}</code>
+              <code>{mapping.reactant.atom_id}</code>
+            </span>
+            <i className="mapping-connection" aria-label="maps to" />
+            <span className="mapping-atom">
+              <strong>{atomSymbol(mapping.product)}</strong>
+              <code>{mapping.product.molecule_id}</code>
+              <code>{mapping.product.atom_id}</code>
+            </span>
           </div>
         ))}
       </div>
@@ -765,7 +768,7 @@ export default function App() {
           onOpenChargeMenu={openChargeMenu}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
-        {buckets && <BucketsPanel buckets={buckets} />}
+        {buckets && <AtomMappingsPanel mappings={buckets.atom_mappings} molecules={molecules} />}
         <MoleculePanel
           side="products"
           title="Products"

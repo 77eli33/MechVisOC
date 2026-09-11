@@ -109,3 +109,9 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
     assert body["product_buckets"] == [
         {"element_name": "Br", "atoms": [{"molecule_id": "product-1", "atom_id": "br-2"}]}
     ]
+    assert body["atom_mappings"] == [
+        {
+            "reactant": {"molecule_id": "reactant-1", "atom_id": "br-1"},
+            "product": {"molecule_id": "product-1", "atom_id": "br-2"},
+        }
+    ]

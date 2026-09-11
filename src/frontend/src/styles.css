@@ -296,6 +296,70 @@ button {
   font-family: "Space Mono", monospace;
 }
 
+.mapping-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.mapping-list > p {
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.mapping-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.mapping-atom {
+  display: grid;
+  gap: 0.18rem;
+  min-width: 0;
+  padding: 0.62rem 0.75rem;
+  border: 1px solid rgba(185, 244, 234, 0.34);
+  border-radius: 0.35rem;
+  background: rgba(41, 80, 78, 0.52);
+}
+
+.mapping-atom code {
+  overflow-wrap: anywhere;
+  color: #e9fffb;
+  font-family: "Space Mono", monospace;
+  font-size: 0.72rem;
+}
+
+.mapping-atom strong {
+  color: #b9f4ea;
+  font: 600 1.15rem/1 "Space Mono", monospace;
+}
+
+.mapping-atom code:first-child {
+  color: var(--ink-muted);
+}
+
+.mapping-connection {
+  position: relative;
+  display: block;
+  height: 2px;
+  background: #b9f4ea;
+  box-shadow: 0 0 6px rgba(185, 244, 234, 0.65);
+}
+
+.mapping-connection::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  right: -1px;
+  width: 0.48rem;
+  height: 0.48rem;
+  border-top: 2px solid #b9f4ea;
+  border-right: 2px solid #b9f4ea;
+  transform: translateY(-50%) rotate(45deg);
+}
+
 @keyframes result-in {
   from {
     opacity: 0;

@@ -64,3 +64,11 @@ class BucketAtom:
 
     molecule_id: str
     atom_id: str
+
+
+@dataclass(frozen=True)
+class AtomRef:
+    molecule_id: str
+    atom_id: str
+
+atom_mapping: dict[AtomRef, AtomRef] = {}

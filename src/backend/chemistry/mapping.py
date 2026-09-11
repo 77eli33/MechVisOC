@@ -2,7 +2,7 @@
 
 from collections import Counter
 
-from .model import Bucket, BucketAtom, Products, Reactants
+from .model import AtomRef, Bucket, BucketAtom, Products, Reactants, atom_mapping
 
 
 def validate_reaction(reactants: Reactants, products: Products) -> bool:
@@ -38,6 +38,33 @@ def sort_atoms_into_buckets(reaction_side: Reactants | Products) -> list[Bucket]
             bucket = buckets.setdefault(atom.element, Bucket(atom.element, []))
             bucket.atoms.append(BucketAtom(molecule.molecule_id, atom.id))
     return list(buckets.values())
+
+
+def map_atoms(reactants: Reactants, products: Products) -> dict[AtomRef, AtomRef]:
+    """Map atoms whose element occurs exactly once on both reaction sides.
+
+    The shared mapping is cleared before each run so it describes only the
+    supplied reaction. Elements with multiple atoms remain unmapped because
+    this first-pass strategy cannot distinguish them unambiguously.
+    """
+    product_buckets = {
+        bucket.element_name: bucket
+        for bucket in sort_atoms_into_buckets(products)
+    }
+    atom_mapping.clear()
+
+    for reactant_bucket in sort_atoms_into_buckets(reactants):
+        product_bucket = product_buckets.get(reactant_bucket.element_name)
+        if len(reactant_bucket.atoms) != 1 or product_bucket is None or len(product_bucket.atoms) != 1:
+            continue
+
+        reactant_atom = reactant_bucket.atoms[0]
+        product_atom = product_bucket.atoms[0]
+        atom_mapping[
+            AtomRef(reactant_atom.molecule_id, reactant_atom.atom_id)
+        ] = AtomRef(product_atom.molecule_id, product_atom.atom_id)
+
+    return atom_mapping
 
 
 def find_backbone(molecule):

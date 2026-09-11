@@ -1,5 +1,5 @@
-from src.backend.chemistry.mapping import sort_atoms_into_buckets, validate_reaction
-from src.backend.chemistry.model import Atom, Molecule, Products, Reactants
+from src.backend.chemistry.mapping import map_atoms, sort_atoms_into_buckets, validate_reaction
+from src.backend.chemistry.model import Atom, AtomRef, Molecule, Products, Reactants
 
 
 def molecule(molecule_id: str, *elements: str) -> Molecule:
@@ -37,3 +37,14 @@ def test_sort_atoms_into_buckets_keeps_molecule_and_atom_ids() -> None:
         ("H", [("reactant-1", "reactant-1-1")]),
         ("O", [("reactant-2", "reactant-2-1")]),
     ]
+
+
+def test_map_atoms_only_maps_singleton_element_buckets() -> None:
+    reactants = Reactants([molecule("reactant", "C", "C", "O")])
+    products = Products([molecule("product", "C", "O", "C")])
+
+    mappings = map_atoms(reactants, products)
+
+    assert mappings == {
+        AtomRef("reactant", "reactant-2"): AtomRef("product", "product-1"),
+    }
