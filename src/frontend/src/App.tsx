@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShaderBackground from "./ShaderBackground";
 
 type Side = "reactants" | "products";
@@ -270,16 +270,18 @@ function MoleculePanel({
         <span>{countLabel}</span>
       </header>
       <div className="molecule-row">
-        {molecules.map((molecule) => (
-          <MoleculeChip
-            key={molecule.id}
-            molecule={molecule}
-            side={side}
-            selected={selectedMoleculeId === molecule.id}
-            onSelect={() => onSelect(molecule)}
-            onOpenChargeMenu={onOpenChargeMenu}
-            onOpenMoleculeMenu={onOpenMoleculeMenu}
-          />
+        {molecules.map((molecule, index) => (
+          <Fragment key={molecule.id}>
+            {index > 0 && <span className="reaction-plus" aria-hidden="true">+</span>}
+            <MoleculeChip
+              molecule={molecule}
+              side={side}
+              selected={selectedMoleculeId === molecule.id}
+              onSelect={() => onSelect(molecule)}
+              onOpenChargeMenu={onOpenChargeMenu}
+              onOpenMoleculeMenu={onOpenMoleculeMenu}
+            />
+          </Fragment>
         ))}
         <button className="add-molecule" type="button" aria-label={`Add molecule to ${title}`} onClick={onAdd}>
           <PlusIcon />

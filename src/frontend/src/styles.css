@@ -128,7 +128,7 @@ button {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: clamp(2rem, 5vw, 4.4rem);
+  gap: clamp(1.1rem, 2.5vw, 2.2rem);
   min-height: 10.5rem;
   padding: 1.3rem clamp(0.35rem, 4vw, 3.8rem) 0;
 }
@@ -145,6 +145,13 @@ button {
   cursor: pointer;
   font-family: "Space Mono", monospace;
   font-size: clamp(1rem, 2vw, 1.35rem);
+}
+
+.reaction-plus {
+  color: var(--ink-muted);
+  font-family: "Space Mono", monospace;
+  font-size: clamp(1.2rem, 2.2vw, 1.65rem);
+  line-height: 1;
 }
 
 .molecule-chip::after {
