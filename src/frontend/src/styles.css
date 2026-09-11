@@ -41,7 +41,7 @@ button {
   position: relative;
   isolation: isolate;
   min-height: 100vh;
-  padding: clamp(1rem, 3vw, 2.5rem);
+  padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 3vw, 2.5rem) 7.5rem;
   overflow: hidden;
 }
 
@@ -130,9 +130,28 @@ button {
   padding: 0.8rem 0.1rem;
   border: 0;
   background: transparent;
-  cursor: context-menu;
+  border-radius: 0.35rem;
+  cursor: pointer;
   font-family: "Space Mono", monospace;
   font-size: clamp(1rem, 2vw, 1.35rem);
+}
+
+.molecule-chip::after {
+  content: "";
+  position: absolute;
+  right: 0.18rem;
+  bottom: -0.15rem;
+  left: 0.18rem;
+  height: 1px;
+  background: rgba(185, 244, 234, 0.92);
+  opacity: 0;
+  transform: scaleX(0.55);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.molecule-chip--selected::after {
+  opacity: 1;
+  transform: scaleX(1);
 }
 
 .formula sub {
@@ -192,6 +211,138 @@ button {
   stroke: currentColor;
   stroke-linecap: round;
   stroke-width: 1.3;
+}
+
+.backbone-panel {
+  min-height: 22rem;
+  border-color: rgba(190, 243, 235, 0.28);
+  animation: result-in 300ms ease-out both;
+}
+
+@keyframes result-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.8rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.result-stage {
+  position: relative;
+  min-height: 14.5rem;
+  margin: 0.4rem clamp(0.25rem, 4vw, 3rem) 0;
+  overflow: hidden;
+}
+
+.result-bonds {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.result-bonds line {
+  stroke: rgba(255, 255, 255, 0.43);
+  stroke-width: 1.3;
+  vector-effect: non-scaling-stroke;
+}
+
+.result-bonds .result-bond--backbone {
+  stroke: #b9f4ea;
+  stroke-width: 3;
+  filter: drop-shadow(0 0 5px rgba(185, 244, 234, 0.62));
+}
+
+.result-atom {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  min-width: 2.55rem;
+  min-height: 2.55rem;
+  padding: 0.2rem 0.42rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(48, 58, 60, 0.9);
+  color: rgba(255, 255, 255, 0.68);
+  box-shadow: 0 0 0 0.35rem rgba(48, 58, 60, 0.31);
+  transform: translate(-50%, -50%);
+  font-family: "Space Mono", monospace;
+  font-size: clamp(1rem, 2vw, 1.3rem);
+}
+
+.result-atom--backbone {
+  border-color: rgba(185, 244, 234, 0.88);
+  background: rgba(41, 80, 78, 0.96);
+  color: #e9fffb;
+  box-shadow: 0 0 0 0.38rem rgba(185, 244, 234, 0.12), 0 0 1.4rem rgba(185, 244, 234, 0.23);
+}
+
+.backbone-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  color: var(--ink-muted);
+  font-size: 0.82rem;
+}
+
+.backbone-legend i {
+  width: 1.4rem;
+  height: 2px;
+  background: #b9f4ea;
+  box-shadow: 0 0 5px rgba(185, 244, 234, 0.6);
+}
+
+.run-control {
+  position: fixed;
+  z-index: 10;
+  right: clamp(1rem, 3vw, 2.5rem);
+  bottom: clamp(1rem, 3vw, 2.5rem);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.run-control p {
+  max-width: min(24rem, 56vw);
+  margin: 0;
+  padding: 0.62rem 0.85rem;
+  border: 1px solid rgba(255, 210, 210, 0.3);
+  border-radius: 0.38rem;
+  background: rgba(69, 42, 43, 0.84);
+  box-shadow: 0 12px 34px rgba(10, 20, 22, 0.2);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  font-size: 0.9rem;
+}
+
+.run-button {
+  min-width: 8.5rem;
+  min-height: 3.5rem;
+  padding: 0.62rem 1.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 0.42rem;
+  background: rgba(40, 59, 61, 0.72);
+  box-shadow: 0 16px 40px rgba(8, 23, 25, 0.27), inset 0 1px rgba(255, 255, 255, 0.13);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  cursor: pointer;
+  font-size: 1.35rem;
+  transition: background 150ms ease, transform 150ms ease;
+}
+
+.run-button:not(:disabled):hover {
+  background: rgba(52, 79, 80, 0.86);
+  transform: translateY(-2px);
+}
+
+.run-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .charge-menu {
@@ -512,6 +663,7 @@ button {
 .initial-atom:focus-visible,
 .atom-node:focus-visible,
 .done-button:focus-visible,
+.run-button:focus-visible,
 .charge-menu button:focus-visible {
   outline: 2px solid white;
   outline-offset: 3px;
@@ -519,7 +671,7 @@ button {
 
 @media (max-width: 640px) {
   .app-shell {
-    padding: 0.75rem;
+    padding: 0.75rem 0.75rem 6.5rem;
   }
 
   .brand-bar {
@@ -567,6 +719,21 @@ button {
 
   .done-button {
     width: 100%;
+  }
+
+  .run-control {
+    right: 0.75rem;
+    bottom: 0.75rem;
+    left: 0.75rem;
+  }
+
+  .run-control p {
+    flex: 1;
+    max-width: none;
+  }
+
+  .run-button {
+    min-width: 7rem;
   }
 }
 

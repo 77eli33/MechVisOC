@@ -1,35 +1,38 @@
+"""Core molecule data structures used by the chemistry algorithms."""
+
+from dataclasses import dataclass, field
+from typing import List
+
+
+@dataclass(frozen=True)
 class Atom:
-    def __init__(self, atom_id, element, formal_charge = 0):
-        self.id = atom_id
-        self.element = element
-        self.formal_charge = formal_charge
+    id: str
+    element: str
+    formal_charge: int = 0
 
-    def is_non_h(self):
-        if self.element is None:
+    def is_non_h(self) -> bool:
+        if not self.element:
             raise ValueError("Atom has no element")
+        return self.element != "H"
 
-        if self.element == "H":
-            return False
 
-        return True
-    
-
+@dataclass(frozen=True)
 class Bond:
-    def __init__(self, atom1_id, atom2_id, order = 1):
-        self.atom1_id = atom1_id
-        self.atom2_id = atom2_id
-        self.order = order
+    atom1_id: str
+    atom2_id: str
+    order: int = 1
 
 
+@dataclass
 class Molecule:
-    def __init__(self, molecule_id, name):
-        self.molecule_id = molecule_id
-        self.name = name
-        self.atoms = []
-        self.bonds = []
+    molecule_id: str
+    name: str
+    charge: int = 0
+    atoms: List[Atom] = field(default_factory=list)
+    bonds: List[Bond] = field(default_factory=list)
 
-    def add_atom(self,atom):
+    def add_atom(self, atom: Atom) -> None:
         self.atoms.append(atom)
 
-    def add_bond(self,bond):
+    def add_bond(self, bond: Bond) -> None:
         self.bonds.append(bond)

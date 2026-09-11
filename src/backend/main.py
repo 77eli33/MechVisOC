@@ -1,19 +1,33 @@
-from chemistry.model import Atom, Bond, Molecule
+"""FastAPI entrypoint for MechVis."""
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .api import BackboneRequest, BackboneResponse, to_domain_molecule
+from .chemistry.mapping import find_backbone
 
 
-molecule = Molecule("Bromoethane")
+app = FastAPI(title="MechVis API", version="0.1.0")
 
-molecule.add_atom(Atom(0, "C"))
-molecule.add_atom(Atom(1, "C"))
-molecule.add_atom(Atom(2, "Br"))
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type"],
+)
 
-molecule.add_bond(Bond(0, 1))
-molecule.add_bond(Bond(1, 2))
 
-print(molecule.name)
+@app.get("/api/health")
+def health() -> dict:
+    return {"status": "ok"}
 
-for atom in molecule.atoms:
-    print(atom.id, atom.element)
 
-for bond in molecule.bonds:
-    print(bond.atom1_id, "-", bond.atom2_id)
+@app.post("/api/backbone", response_model=BackboneResponse)
+def backbone(request: BackboneRequest) -> BackboneResponse:
+    molecule = to_domain_molecule(request.molecule)
+    backbone_atoms = find_backbone(molecule)
+    return BackboneResponse(
+        molecule=request.molecule,
+        backbone_atom_ids=[atom.id for atom in backbone_atoms],
+    )

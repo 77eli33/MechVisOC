@@ -12,8 +12,16 @@ type Molecule = {
   formula: FormulaPart[];
   charge: number;
 };
+type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string };
 type ChargeMenuState = { side: Side; moleculeId: string; x: number; y: number };
+type ApiMolecule = {
+  id: string;
+  name: string;
+  charge: number;
+  atoms: Array<{ id: string; element: string; x: number; y: number; formal_charge: number }>;
+  bonds: Array<{ atom1_id: string; atom2_id: string; order: number }>;
+};
 type ModelContext = {
   registerTool: (
     tool: {
@@ -35,32 +43,7 @@ const directions = [
   { x: -1, y: 0, label: "to the left" },
 ];
 
-const seedMolecules: Record<Side, Molecule[]> = {
-  reactants: [
-    {
-      id: "bromobutane",
-      atoms: [],
-      bonds: [],
-      formula: [
-        { symbol: "C", count: 4 },
-        { symbol: "H", count: 12 },
-        { symbol: "Br", count: 1 },
-      ],
-      charge: -1,
-    },
-    {
-      id: "hydronium",
-      atoms: [],
-      bonds: [],
-      formula: [
-        { symbol: "H", count: 3 },
-        { symbol: "O", count: 1 },
-      ],
-      charge: 1,
-    },
-  ],
-  products: [],
-};
+const emptyMolecules: Record<Side, Molecule[]> = { reactants: [], products: [] };
 
 const PlusIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -88,22 +71,62 @@ function normalizeSymbol(value: string) {
   return letters ? letters[0].toUpperCase() + letters.slice(1).toLowerCase() : "";
 }
 
-function moleculeFromSymbols(symbols: string[], charge = 0): Molecule {
-  const atoms = symbols.map((symbol, index) => ({
-    id: crypto.randomUUID(),
-    symbol,
-    x: index,
-    y: 0,
-  }));
+function formulaFromAtoms(atoms: Atom[]) {
   const counts = new Map<string, number>();
-  symbols.forEach((symbol) => counts.set(symbol, (counts.get(symbol) ?? 0) + 1));
+  atoms.forEach((atom) => counts.set(atom.symbol, (counts.get(atom.symbol) ?? 0) + 1));
+  return Array.from(counts, ([symbol, count]) => ({ symbol, count }));
+}
+
+function moleculeFromSymbols(symbols: string[], charge = 0): Molecule {
+  const atoms = symbols.map((symbol, index) => ({ id: crypto.randomUUID(), symbol, x: index, y: 0 }));
   return {
     id: crypto.randomUUID(),
     atoms,
     bonds: atoms.slice(1).map((atom, index) => ({ from: atoms[index].id, to: atom.id })),
-    formula: Array.from(counts, ([symbol, count]) => ({ symbol, count })),
+    formula: formulaFromAtoms(atoms),
     charge,
   };
+}
+
+function toApiMolecule(molecule: Molecule): ApiMolecule {
+  return {
+    id: molecule.id,
+    name: formatFormulaLabel(molecule.formula),
+    charge: molecule.charge,
+    atoms: molecule.atoms.map((atom) => ({
+      id: atom.id,
+      element: atom.symbol,
+      x: atom.x,
+      y: atom.y,
+      formal_charge: 0,
+    })),
+    bonds: molecule.bonds.map((bond) => ({ atom1_id: bond.from, atom2_id: bond.to, order: 1 })),
+  };
+}
+
+function fromApiMolecule(molecule: ApiMolecule): Molecule {
+  const atoms = molecule.atoms.map((atom) => ({ id: atom.id, symbol: atom.element, x: atom.x, y: atom.y }));
+  return {
+    id: molecule.id,
+    atoms,
+    bonds: molecule.bonds.map((bond) => ({ from: bond.atom1_id, to: bond.atom2_id })),
+    formula: formulaFromAtoms(atoms),
+    charge: molecule.charge,
+  };
+}
+
+async function requestBackbone(molecule: Molecule): Promise<BackboneAnalysis> {
+  const response = await fetch("/api/backbone", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ molecule: toApiMolecule(molecule) }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(body?.detail ?? "The backbone analysis could not be completed.");
+  }
+  const body = await response.json() as { molecule: ApiMolecule; backbone_atom_ids: string[] };
+  return { molecule: fromApiMolecule(body.molecule), backboneAtomIds: body.backbone_atom_ids };
 }
 
 function Formula({ parts }: { parts: FormulaPart[] }) {
@@ -122,19 +145,25 @@ function Formula({ parts }: { parts: FormulaPart[] }) {
 function MoleculeChip({
   molecule,
   side,
+  selected,
+  onSelect,
   onOpenChargeMenu,
 }: {
   molecule: Molecule;
   side: Side;
+  selected: boolean;
+  onSelect: () => void;
   onOpenChargeMenu: (menu: ChargeMenuState) => void;
 }) {
   const label = `${formatFormulaLabel(molecule.formula)}, ${chargeLabel(molecule.charge)} charge`;
   return (
     <button
-      className="molecule-chip"
+      className={`molecule-chip${selected ? " molecule-chip--selected" : ""}`}
       type="button"
       aria-label={`${label}. Right-click to edit charge.`}
-      title="Right-click to edit charge"
+      aria-pressed={selected}
+      title="Select molecule · Right-click to edit charge"
+      onClick={onSelect}
       onContextMenu={(event) => {
         event.preventDefault();
         onOpenChargeMenu({ side, moleculeId: molecule.id, x: event.clientX, y: event.clientY });
@@ -157,12 +186,16 @@ function MoleculePanel({
   side,
   title,
   molecules,
+  selectedMoleculeId,
+  onSelect,
   onAdd,
   onOpenChargeMenu,
 }: {
   side: Side;
   title: string;
   molecules: Molecule[];
+  selectedMoleculeId: string | null;
+  onSelect: (molecule: Molecule) => void;
   onAdd: () => void;
   onOpenChargeMenu: (menu: ChargeMenuState) => void;
 }) {
@@ -181,6 +214,8 @@ function MoleculePanel({
             key={molecule.id}
             molecule={molecule}
             side={side}
+            selected={selectedMoleculeId === molecule.id}
+            onSelect={() => onSelect(molecule)}
             onOpenChargeMenu={onOpenChargeMenu}
           />
         ))}
@@ -238,6 +273,78 @@ function ChargeMenu({
   );
 }
 
+function MoleculeStructure({ analysis }: { analysis: BackboneAnalysis }) {
+  const { molecule, backboneAtomIds } = analysis;
+  const backboneAtoms = new Set(backboneAtomIds);
+  const backboneEdges = new Set(
+    backboneAtomIds.slice(1).map((atomId, index) => [backboneAtomIds[index], atomId].sort().join("::")),
+  );
+  const xs = molecule.atoms.map((atom) => atom.x);
+  const ys = molecule.atoms.map((atom) => atom.y);
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+  const stepX = Math.min(18, 72 / Math.max(1, maxX - minX));
+  const stepY = Math.min(24, 68 / Math.max(1, maxY - minY));
+  const position = (atom: Atom) => ({ x: 50 + (atom.x - centerX) * stepX, y: 50 + (atom.y - centerY) * stepY });
+
+  return (
+    <div className="result-stage" aria-label={`Analyzed structure for ${formatFormulaLabel(molecule.formula)}`}>
+      <svg className="result-bonds" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        {molecule.bonds.map((bond) => {
+          const from = molecule.atoms.find((atom) => atom.id === bond.from);
+          const to = molecule.atoms.find((atom) => atom.id === bond.to);
+          if (!from || !to) return null;
+          const start = position(from);
+          const end = position(to);
+          const key = [bond.from, bond.to].sort().join("::");
+          return (
+            <line
+              key={key}
+              className={backboneEdges.has(key) ? "result-bond--backbone" : ""}
+              x1={start.x}
+              y1={start.y}
+              x2={end.x}
+              y2={end.y}
+            />
+          );
+        })}
+      </svg>
+      {molecule.atoms.map((atom) => {
+        const point = position(atom);
+        const highlighted = backboneAtoms.has(atom.id);
+        return (
+          <span
+            key={atom.id}
+            className={`result-atom${highlighted ? " result-atom--backbone" : ""}`}
+            style={{ left: `${point.x}%`, top: `${point.y}%` }}
+            aria-label={`${atom.symbol} atom${highlighted ? ", part of backbone" : ""}`}
+          >
+            {atom.symbol}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
+  const count = analysis.backboneAtomIds.length;
+  return (
+    <section className="molecule-panel backbone-panel" aria-labelledby="backbone-title">
+      <header className="panel-heading">
+        <h2 id="backbone-title">Backbone</h2>
+        <span>{count > 0 ? `${count} ${count === 1 ? "atom" : "atoms"} found` : "No backbone found"}</span>
+      </header>
+      <MoleculeStructure analysis={analysis} />
+      <div className="backbone-legend"><i aria-hidden="true" /> Highlighted backbone</div>
+    </section>
+  );
+}
+
 function MoleculeEditor({
   destination,
   onClose,
@@ -289,15 +396,9 @@ function MoleculeEditor({
     setPendingAtom(null);
     setSymbol("");
   };
-
-  const composition = useMemo(() => {
-    const counts = new Map<string, number>();
-    atoms.forEach((atom) => counts.set(atom.symbol, (counts.get(atom.symbol) ?? 0) + 1));
-    return Array.from(counts, ([partSymbol, count]) => ({ symbol: partSymbol, count }));
-  }, [atoms]);
-
+  const composition = useMemo(() => formulaFromAtoms(atoms), [atoms]);
   const save = () => {
-    if (atoms.length === 0) return;
+    if (atoms.length === 0 || pendingAtom) return;
     onSave({ id: crypto.randomUUID(), atoms, bonds, formula: composition, charge: 0 });
   };
 
@@ -320,15 +421,7 @@ function MoleculeEditor({
               const from = atoms.find((atom) => atom.id === bond.from);
               const to = atoms.find((atom) => atom.id === bond.to);
               if (!from || !to) return null;
-              return (
-                <line
-                  key={`${bond.from}-${bond.to}`}
-                  x1={50 + from.x * 14}
-                  y1={50 + from.y * 20}
-                  x2={50 + to.x * 14}
-                  y2={50 + to.y * 20}
-                />
-              );
+              return <line key={`${bond.from}-${bond.to}`} x1={50 + from.x * 14} y1={50 + from.y * 20} x2={50 + to.x * 14} y2={50 + to.y * 20} />;
             })}
           </svg>
 
@@ -348,7 +441,7 @@ function MoleculeEditor({
           {selectedAtom && !pendingAtom && directions.map((direction) => {
             const x = selectedAtom.x + direction.x;
             const y = selectedAtom.y + direction.y;
-            if (isOccupied(x, y)) return null;
+            if (isOccupied(x, y) || Math.abs(x) > 3 || Math.abs(y) > 2) return null;
             return (
               <button
                 key={direction.label}
@@ -380,9 +473,7 @@ function MoleculeEditor({
                 spellCheck={false}
                 aria-label="Element shorthand"
                 placeholder="X"
-                onChange={(event) => {
-                  setSymbol(normalizeSymbol(event.target.value));
-                }}
+                onChange={(event) => setSymbol(normalizeSymbol(event.target.value))}
                 onKeyDown={(event) => event.key === "Enter" && commitAtom()}
                 onBlur={() => symbol && commitAtom()}
               />
@@ -393,7 +484,7 @@ function MoleculeEditor({
 
         <footer className="editor-footer">
           <p>{atoms.length === 0 ? "Start with an atom, then build in four directions." : "Select an atom to extend the structure."}</p>
-          <button className="done-button" type="button" disabled={atoms.length === 0} onClick={save}>Done</button>
+          <button className="done-button" type="button" disabled={atoms.length === 0 || Boolean(pendingAtom)} onClick={save}>Done</button>
         </footer>
       </section>
     </div>
@@ -401,14 +492,33 @@ function MoleculeEditor({
 }
 
 export default function App() {
-  const [molecules, setMolecules] = useState(seedMolecules);
+  const [molecules, setMolecules] = useState<Record<Side, Molecule[]>>(emptyMolecules);
+  const [selectedMoleculeId, setSelectedMoleculeId] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<BackboneAnalysis | null>(null);
   const [editorSide, setEditorSide] = useState<Side | null>(null);
   const [chargeMenu, setChargeMenu] = useState<ChargeMenuState | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [runError, setRunError] = useState<string | null>(null);
+
+  const allMolecules = [...molecules.reactants, ...molecules.products];
+  const selectedMolecule = allMolecules.find((molecule) => molecule.id === selectedMoleculeId);
+  const selectedChargeMolecule = chargeMenu
+    ? molecules[chargeMenu.side].find((molecule) => molecule.id === chargeMenu.moleculeId)
+    : undefined;
 
   const saveMolecule = useCallback((side: Side, molecule: Molecule) => {
     setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
+    setSelectedMoleculeId(molecule.id);
+    setAnalysis(null);
+    setRunError(null);
     setEditorSide(null);
   }, []);
+
+  const selectMolecule = (molecule: Molecule) => {
+    setSelectedMoleculeId(molecule.id);
+    if (analysis?.molecule.id !== molecule.id) setAnalysis(null);
+    setRunError(null);
+  };
 
   const updateCharge = (amount: number) => {
     if (!chargeMenu) return;
@@ -418,17 +528,28 @@ export default function App() {
         molecule.id === chargeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
       ),
     }));
+    setAnalysis((current) => current?.molecule.id === chargeMenu.moleculeId
+      ? { ...current, molecule: { ...current.molecule, charge: current.molecule.charge + amount } }
+      : current);
   };
 
-  const selectedChargeMolecule = chargeMenu
-    ? molecules[chargeMenu.side].find((molecule) => molecule.id === chargeMenu.moleculeId)
-    : undefined;
+  const runBackbone = async () => {
+    if (!selectedMolecule) return;
+    setIsRunning(true);
+    setRunError(null);
+    try {
+      setAnalysis(await requestBackbone(selectedMolecule));
+    } catch (error) {
+      setRunError(error instanceof Error ? error.message : "The backbone analysis could not be completed.");
+    } finally {
+      setIsRunning(false);
+    }
+  };
 
   useEffect(() => {
     const context = (document as Document & { modelContext?: ModelContext }).modelContext;
     if (!context?.registerTool) return;
     const lifecycle = new AbortController();
-
     void Promise.resolve(context.registerTool({
       name: "add_molecule",
       title: "Add molecule",
@@ -437,11 +558,7 @@ export default function App() {
         type: "object",
         properties: {
           side: { type: "string", enum: ["reactants", "products"] },
-          elements: {
-            type: "array",
-            minItems: 1,
-            items: { type: "string", pattern: "^[A-Za-z]{1,2}$" },
-          },
+          elements: { type: "array", minItems: 1, items: { type: "string", pattern: "^[A-Za-z]{1,2}$" } },
           charge: { type: "integer", default: 0 },
         },
         required: ["side", "elements"],
@@ -450,29 +567,19 @@ export default function App() {
       annotations: { readOnlyHint: false, untrustedContentHint: false },
       execute(input) {
         const candidate = input as { side?: unknown; elements?: unknown; charge?: unknown };
-        if (candidate.side !== "reactants" && candidate.side !== "products") {
-          throw new Error("Side must be reactants or products.");
-        }
+        if (candidate.side !== "reactants" && candidate.side !== "products") throw new Error("Side must be reactants or products.");
+        if (!Array.isArray(candidate.elements) || candidate.elements.length === 0) throw new Error("At least one element shorthand is required.");
         const side: Side = candidate.side;
-        if (!Array.isArray(candidate.elements) || candidate.elements.length === 0) {
-          throw new Error("At least one element shorthand is required.");
-        }
         const elements = candidate.elements.map((value) => normalizeSymbol(String(value)));
-        if (elements.some((value) => !value)) {
-          throw new Error("Each shorthand must contain one or two letters.");
-        }
-        const charge = typeof candidate.charge === "number" && Number.isInteger(candidate.charge)
-          ? candidate.charge
-          : 0;
+        if (elements.some((value) => !value)) throw new Error("Each shorthand must contain one or two letters.");
+        const charge = typeof candidate.charge === "number" && Number.isInteger(candidate.charge) ? candidate.charge : 0;
         const molecule = moleculeFromSymbols(elements, charge);
-        setMolecules((current) => ({
-          ...current,
-          [side]: [...current[side], molecule],
-        }));
+        setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
+        setSelectedMoleculeId(molecule.id);
+        setAnalysis(null);
         return { id: molecule.id, side, formula: formatFormulaLabel(molecule.formula), charge };
       },
     }, { signal: lifecycle.signal })).catch(() => undefined);
-
     return () => lifecycle.abort();
   }, []);
 
@@ -486,8 +593,32 @@ export default function App() {
       </header>
 
       <div className="workspace">
-        <MoleculePanel side="reactants" title="Reactants" molecules={molecules.reactants} onAdd={() => setEditorSide("reactants")} onOpenChargeMenu={setChargeMenu} />
-        <MoleculePanel side="products" title="Products" molecules={molecules.products} onAdd={() => setEditorSide("products")} onOpenChargeMenu={setChargeMenu} />
+        <MoleculePanel
+          side="reactants"
+          title="Reactants"
+          molecules={molecules.reactants}
+          selectedMoleculeId={selectedMoleculeId}
+          onSelect={selectMolecule}
+          onAdd={() => setEditorSide("reactants")}
+          onOpenChargeMenu={setChargeMenu}
+        />
+        {analysis && <BackbonePanel analysis={analysis} />}
+        <MoleculePanel
+          side="products"
+          title="Products"
+          molecules={molecules.products}
+          selectedMoleculeId={selectedMoleculeId}
+          onSelect={selectMolecule}
+          onAdd={() => setEditorSide("products")}
+          onOpenChargeMenu={setChargeMenu}
+        />
+      </div>
+
+      <div className="run-control">
+        {runError && <p role="alert">{runError}</p>}
+        <button type="button" className="run-button" disabled={!selectedMolecule || isRunning} onClick={runBackbone}>
+          {isRunning ? "Running…" : "Run"}
+        </button>
       </div>
 
       {chargeMenu && selectedChargeMolecule && (

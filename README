@@ -1,3 +1,22 @@
-The project is still in a very early development/experimental stage. 
+The project is still in a very early development/experimental stage.
 
-The goal is to build a small Visualization Tool for Organic Chemistry Reaction types. The Program is suppposed to visualize Electron and Atom movements for given Reactants and Products with a selected Reaction Mechanism. It should just be a helpful tool for students to better visualize what is happening during the Reaction. The tool is not supposed to be taken as a source of truth for studying these topics, knowledge in the field is required to validate the Program's Output.
+The goal is to build a small visualization tool for organic chemistry reaction types. The program is intended to visualize electron and atom movements for given reactants and products with a selected reaction mechanism. It should be a helpful tool for students to better understand what happens during a reaction. It is not a source of truth for studying these topics; knowledge in the field is required to validate its output.
+
+Development
+-----------
+
+Install the backend dependencies:
+
+    .venv/bin/python -m pip install -r src/backend/requirements-dev.txt
+
+Start the backend from the repository root:
+
+    .venv/bin/python -m uvicorn src.backend.main:app --reload
+
+In a second terminal, start the frontend:
+
+    cd src/frontend
+    npm install
+    npm run dev
+
+Open http://127.0.0.1:5173. The frontend development server proxies `/api` requests to the backend at http://127.0.0.1:8000.
