@@ -36,3 +36,23 @@ class Molecule:
 
     def add_bond(self, bond: Bond) -> None:
         self.bonds.append(bond)
+
+
+@dataclass
+class Reactants:
+    """Molecules on the left-hand side of a reaction."""
+
+    molecules: List[Molecule] = field(default_factory=list)
+
+
+@dataclass
+class Products:
+    """Molecules on the right-hand side of a reaction."""
+
+    molecules: List[Molecule] = field(default_factory=list)
+
+
+@dataclass
+class Bucket:
+    element_name: str
+    atoms: list[Atom]

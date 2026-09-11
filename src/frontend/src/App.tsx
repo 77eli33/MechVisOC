@@ -24,6 +24,7 @@ type ApiMolecule = {
   atoms: Array<{ id: string; element: string; x: number; y: number; formal_charge: number }>;
   bonds: Array<{ atom1_id: string; atom2_id: string; order: number }>;
 };
+type ApiMoleculeCollection = { molecules: ApiMolecule[] };
 type ModelContext = {
   registerTool: (
     tool: {
@@ -129,6 +130,20 @@ async function requestBackbone(molecule: Molecule): Promise<BackboneAnalysis> {
   }
   const body = await response.json() as { molecule: ApiMolecule; backbone_atom_ids: string[] };
   return { molecule: fromApiMolecule(body.molecule), backboneAtomIds: body.backbone_atom_ids };
+}
+
+async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): Promise<void> {
+  const reactants: ApiMoleculeCollection = { molecules: molecules.reactants.map(toApiMolecule) };
+  const products: ApiMoleculeCollection = { molecules: molecules.products.map(toApiMolecule) };
+  const response = await fetch("/api/atom-mapping", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reactants, products }),
+  });
+  if (!response.ok) {
+    const body = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(body?.detail ?? "The reaction could not be transferred for atom mapping.");
+  }
 }
 
 function Formula({ parts }: { parts: FormulaPart[] }) {
@@ -643,11 +658,12 @@ export default function App() {
     setMoleculeMenu(menu);
   };
 
-  const runBackbone = async () => {
+  const runAnalysis = async () => {
     if (!selectedMolecule) return;
     setIsRunning(true);
     setRunError(null);
     try {
+      await sendReactionForAtomMapping(molecules);
       setAnalysis(await requestBackbone(selectedMolecule));
     } catch (error) {
       setRunError(error instanceof Error ? error.message : "The backbone analysis could not be completed.");
@@ -728,7 +744,7 @@ export default function App() {
 
       <div className="run-control">
         {runError && <p role="alert">{runError}</p>}
-        <button type="button" className="run-button" disabled={!selectedMolecule || isRunning} onClick={runBackbone}>
+        <button type="button" className="run-button" disabled={!selectedMolecule || isRunning} onClick={runAnalysis}>
           {isRunning ? "Running…" : "Run"}
         </button>
       </div>

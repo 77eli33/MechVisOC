@@ -59,3 +59,46 @@ def test_backbone_rejects_unknown_bond_endpoint() -> None:
 
     assert response.status_code == 422
     assert "bond endpoint" in response.json()["detail"]
+
+
+def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
+    reactant = {
+        "id": "reactant-1",
+        "name": "HBr",
+        "charge": 0,
+        "atoms": [
+            {"id": "h-1", "element": "H", "x": 0, "y": 0},
+            {"id": "br-1", "element": "Br", "x": 1, "y": 0},
+        ],
+        "bonds": [{"atom1_id": "h-1", "atom2_id": "br-1", "order": 1}],
+    }
+    product = {
+        "id": "product-1",
+        "name": "Br",
+        "charge": -1,
+        "atoms": [{"id": "br-2", "element": "Br", "x": 0, "y": 0}],
+        "bonds": [],
+    }
+    payload = {
+        "reactants": {"molecules": [reactant]},
+        "products": {"molecules": [product]},
+    }
+
+    response = client.post("/api/atom-mapping", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["reactants"]["molecules"] == [
+        {
+            **reactant,
+            "atoms": [
+                {**reactant["atoms"][0], "formal_charge": 0},
+                {**reactant["atoms"][1], "formal_charge": 0},
+            ],
+        }
+    ]
+    assert body["products"]["molecules"] == [
+        {**product, "atoms": [{**product["atoms"][0], "formal_charge": 0}]}
+    ]
+    assert body["reactant_count"] == 1
+    assert body["product_count"] == 1

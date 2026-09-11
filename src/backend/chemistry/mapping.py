@@ -66,3 +66,4 @@ def find_ends(molecule):
 def find_non_h_atoms(molecule):
     """Return all atoms except hydrogen atoms."""
     return [atom for atom in molecule.atoms if atom.is_non_h()]
+

@@ -5,7 +5,7 @@ from typing import List
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from .chemistry.model import Atom, Bond, Molecule
+from .chemistry.model import Atom, Bond, Molecule, Products, Reactants
 
 
 class AtomPayload(BaseModel):
@@ -46,6 +46,26 @@ class BackboneResponse(BaseModel):
     backbone_atom_ids: List[str]
 
 
+class ReactantsPayload(BaseModel):
+    molecules: List[MoleculePayload] = Field(default_factory=list)
+
+
+class ProductsPayload(BaseModel):
+    molecules: List[MoleculePayload] = Field(default_factory=list)
+
+
+class AtomMappingRequest(BaseModel):
+    reactants: ReactantsPayload
+    products: ProductsPayload
+
+
+class AtomMappingResponse(BaseModel):
+    reactants: ReactantsPayload
+    products: ProductsPayload
+    reactant_count: int
+    product_count: int
+
+
 def to_domain_molecule(payload: MoleculePayload) -> Molecule:
     """Convert an API molecule into the chemistry domain model."""
     atom_ids = [atom.id for atom in payload.atoms]
@@ -68,3 +88,13 @@ def to_domain_molecule(payload: MoleculePayload) -> Molecule:
     for bond in payload.bonds:
         molecule.add_bond(Bond(bond.atom1_id, bond.atom2_id, bond.order))
     return molecule
+
+
+def to_domain_reactants(payload: ReactantsPayload) -> Reactants:
+    """Convert all reactant payloads into the chemistry domain model."""
+    return Reactants(molecules=[to_domain_molecule(molecule) for molecule in payload.molecules])
+
+
+def to_domain_products(payload: ProductsPayload) -> Products:
+    """Convert all product payloads into the chemistry domain model."""
+    return Products(molecules=[to_domain_molecule(molecule) for molecule in payload.molecules])
