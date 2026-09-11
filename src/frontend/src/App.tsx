@@ -15,6 +15,8 @@ type Molecule = {
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string };
 type ChargeMenuState = { side: Side; moleculeId: string; x: number; y: number };
+type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
+type EditorState = { side: Side; molecule?: Molecule };
 type ApiMolecule = {
   id: string;
   name: string;
@@ -148,25 +150,31 @@ function MoleculeChip({
   selected,
   onSelect,
   onOpenChargeMenu,
+  onOpenMoleculeMenu,
 }: {
   molecule: Molecule;
   side: Side;
   selected: boolean;
   onSelect: () => void;
   onOpenChargeMenu: (menu: ChargeMenuState) => void;
+  onOpenMoleculeMenu: (menu: MoleculeMenuState) => void;
 }) {
   const label = `${formatFormulaLabel(molecule.formula)}, ${chargeLabel(molecule.charge)} charge`;
   return (
     <button
       className={`molecule-chip${selected ? " molecule-chip--selected" : ""}`}
       type="button"
-      aria-label={`${label}. Right-click to edit charge.`}
+      aria-label={`${label}. Click to edit charge; right-click for edit and remove actions.`}
       aria-pressed={selected}
-      title="Select molecule · Right-click to edit charge"
-      onClick={onSelect}
+      title="Click to edit charge · Right-click for more actions"
+      onClick={(event) => {
+        onSelect();
+        onOpenChargeMenu({ side, moleculeId: molecule.id, x: event.clientX, y: event.clientY });
+      }}
       onContextMenu={(event) => {
         event.preventDefault();
-        onOpenChargeMenu({ side, moleculeId: molecule.id, x: event.clientX, y: event.clientY });
+        onSelect();
+        onOpenMoleculeMenu({ side, moleculeId: molecule.id, x: event.clientX, y: event.clientY });
       }}
     >
       <span className="formula-bracket" aria-hidden="true" />
@@ -190,6 +198,7 @@ function MoleculePanel({
   onSelect,
   onAdd,
   onOpenChargeMenu,
+  onOpenMoleculeMenu,
 }: {
   side: Side;
   title: string;
@@ -198,6 +207,7 @@ function MoleculePanel({
   onSelect: (molecule: Molecule) => void;
   onAdd: () => void;
   onOpenChargeMenu: (menu: ChargeMenuState) => void;
+  onOpenMoleculeMenu: (menu: MoleculeMenuState) => void;
 }) {
   const countLabel = molecules.length === 0
     ? "No molecules yet"
@@ -217,6 +227,7 @@ function MoleculePanel({
             selected={selectedMoleculeId === molecule.id}
             onSelect={() => onSelect(molecule)}
             onOpenChargeMenu={onOpenChargeMenu}
+            onOpenMoleculeMenu={onOpenMoleculeMenu}
           />
         ))}
         <button className="add-molecule" type="button" aria-label={`Add molecule to ${title}`} onClick={onAdd}>
@@ -269,6 +280,48 @@ function ChargeMenu({
         <button type="button" role="menuitem" aria-label="Decrease charge" onClick={() => onChange(-1)}>−</button>
         <button type="button" role="menuitem" aria-label="Increase charge" onClick={() => onChange(1)}>+</button>
       </div>
+    </div>
+  );
+}
+
+function MoleculeMenu({
+  menu,
+  onEdit,
+  onRemove,
+  onClose,
+}: {
+  menu: MoleculeMenuState;
+  onEdit: () => void;
+  onRemove: () => void;
+  onClose: () => void;
+}) {
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const close = () => onClose();
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("blur", close);
+    window.addEventListener("keydown", onKey);
+    menuRef.current?.focus();
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("blur", close);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={menuRef}
+      className="molecule-menu"
+      role="menu"
+      tabIndex={-1}
+      aria-label="Molecule actions"
+      style={{ left: Math.min(menu.x, window.innerWidth - 170), top: Math.min(menu.y, window.innerHeight - 108) }}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <button type="button" role="menuitem" onClick={onEdit}>Edit</button>
+      <button type="button" role="menuitem" className="molecule-menu__remove" onClick={onRemove}>Remove</button>
     </div>
   );
 }
@@ -347,16 +400,18 @@ function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
 
 function MoleculeEditor({
   destination,
+  initialMolecule,
   onClose,
   onSave,
 }: {
   destination: Side;
+  initialMolecule?: Molecule;
   onClose: () => void;
   onSave: (molecule: Molecule) => void;
 }) {
-  const [atoms, setAtoms] = useState<Atom[]>([]);
-  const [bonds, setBonds] = useState<Bond[]>([]);
-  const [selectedAtomId, setSelectedAtomId] = useState<string | null>(null);
+  const [atoms, setAtoms] = useState<Atom[]>(() => initialMolecule?.atoms.map((atom) => ({ ...atom })) ?? []);
+  const [bonds, setBonds] = useState<Bond[]>(() => initialMolecule?.bonds.map((bond) => ({ ...bond })) ?? []);
+  const [selectedAtomId, setSelectedAtomId] = useState<string | null>(initialMolecule?.atoms[0]?.id ?? null);
   const [pendingAtom, setPendingAtom] = useState<PendingAtom | null>(null);
   const [symbol, setSymbol] = useState("");
   const symbolInputRef = useRef<HTMLInputElement>(null);
@@ -399,7 +454,14 @@ function MoleculeEditor({
   const composition = useMemo(() => formulaFromAtoms(atoms), [atoms]);
   const save = () => {
     if (atoms.length === 0 || pendingAtom) return;
-    onSave({ id: crypto.randomUUID(), atoms, bonds, formula: composition, charge: 0 });
+    const molecule = {
+      id: initialMolecule?.id ?? crypto.randomUUID(),
+      atoms,
+      bonds,
+      formula: composition,
+      charge: initialMolecule?.charge ?? 0,
+    };
+    onSave(molecule);
   };
 
   return (
@@ -408,7 +470,7 @@ function MoleculeEditor({
         <header className="editor-heading">
           <div>
             <p>{destination === "reactants" ? "Reactants" : "Products"}</p>
-            <h2 id="editor-title">Molecule Editor</h2>
+            <h2 id="editor-title">{initialMolecule ? "Edit Molecule" : "Molecule Editor"}</h2>
           </div>
           <button className="icon-button" type="button" aria-label="Close molecule editor" onClick={onClose}>
             <CloseIcon />
@@ -495,8 +557,9 @@ export default function App() {
   const [molecules, setMolecules] = useState<Record<Side, Molecule[]>>(emptyMolecules);
   const [selectedMoleculeId, setSelectedMoleculeId] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<BackboneAnalysis | null>(null);
-  const [editorSide, setEditorSide] = useState<Side | null>(null);
+  const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [chargeMenu, setChargeMenu] = useState<ChargeMenuState | null>(null);
+  const [moleculeMenu, setMoleculeMenu] = useState<MoleculeMenuState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
 
@@ -505,13 +568,24 @@ export default function App() {
   const selectedChargeMolecule = chargeMenu
     ? molecules[chargeMenu.side].find((molecule) => molecule.id === chargeMenu.moleculeId)
     : undefined;
+  const selectedActionMolecule = moleculeMenu
+    ? molecules[moleculeMenu.side].find((molecule) => molecule.id === moleculeMenu.moleculeId)
+    : undefined;
 
   const saveMolecule = useCallback((side: Side, molecule: Molecule) => {
-    setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
+    setMolecules((current) => {
+      const exists = current[side].some((currentMolecule) => currentMolecule.id === molecule.id);
+      return {
+        ...current,
+        [side]: exists
+          ? current[side].map((currentMolecule) => currentMolecule.id === molecule.id ? molecule : currentMolecule)
+          : [...current[side], molecule],
+      };
+    });
     setSelectedMoleculeId(molecule.id);
     setAnalysis(null);
     setRunError(null);
-    setEditorSide(null);
+    setEditorState(null);
   }, []);
 
   const selectMolecule = (molecule: Molecule) => {
@@ -531,6 +605,27 @@ export default function App() {
     setAnalysis((current) => current?.molecule.id === chargeMenu.moleculeId
       ? { ...current, molecule: { ...current.molecule, charge: current.molecule.charge + amount } }
       : current);
+  };
+
+  const removeMolecule = (side: Side, moleculeId: string) => {
+    setMolecules((current) => ({
+      ...current,
+      [side]: current[side].filter((molecule) => molecule.id !== moleculeId),
+    }));
+    if (selectedMoleculeId === moleculeId) setSelectedMoleculeId(null);
+    if (analysis?.molecule.id === moleculeId) setAnalysis(null);
+    setMoleculeMenu(null);
+    setRunError(null);
+  };
+
+  const openChargeMenu = (menu: ChargeMenuState) => {
+    setMoleculeMenu(null);
+    setChargeMenu(menu);
+  };
+
+  const openMoleculeMenu = (menu: MoleculeMenuState) => {
+    setChargeMenu(null);
+    setMoleculeMenu(menu);
   };
 
   const runBackbone = async () => {
@@ -599,8 +694,9 @@ export default function App() {
           molecules={molecules.reactants}
           selectedMoleculeId={selectedMoleculeId}
           onSelect={selectMolecule}
-          onAdd={() => setEditorSide("reactants")}
-          onOpenChargeMenu={setChargeMenu}
+          onAdd={() => setEditorState({ side: "reactants" })}
+          onOpenChargeMenu={openChargeMenu}
+          onOpenMoleculeMenu={openMoleculeMenu}
         />
         {analysis && <BackbonePanel analysis={analysis} />}
         <MoleculePanel
@@ -609,8 +705,9 @@ export default function App() {
           molecules={molecules.products}
           selectedMoleculeId={selectedMoleculeId}
           onSelect={selectMolecule}
-          onAdd={() => setEditorSide("products")}
-          onOpenChargeMenu={setChargeMenu}
+          onAdd={() => setEditorState({ side: "products" })}
+          onOpenChargeMenu={openChargeMenu}
+          onOpenMoleculeMenu={openMoleculeMenu}
         />
       </div>
 
@@ -624,8 +721,24 @@ export default function App() {
       {chargeMenu && selectedChargeMolecule && (
         <ChargeMenu menu={chargeMenu} molecule={selectedChargeMolecule} onChange={updateCharge} onClose={() => setChargeMenu(null)} />
       )}
-      {editorSide && (
-        <MoleculeEditor destination={editorSide} onClose={() => setEditorSide(null)} onSave={(molecule) => saveMolecule(editorSide, molecule)} />
+      {moleculeMenu && selectedActionMolecule && (
+        <MoleculeMenu
+          menu={moleculeMenu}
+          onEdit={() => {
+            setEditorState({ side: moleculeMenu.side, molecule: selectedActionMolecule });
+            setMoleculeMenu(null);
+          }}
+          onRemove={() => removeMolecule(moleculeMenu.side, selectedActionMolecule.id)}
+          onClose={() => setMoleculeMenu(null)}
+        />
+      )}
+      {editorState && (
+        <MoleculeEditor
+          destination={editorState.side}
+          initialMolecule={editorState.molecule}
+          onClose={() => setEditorState(null)}
+          onSave={(molecule) => saveMolecule(editorState.side, molecule)}
+        />
       )}
     </main>
   );

@@ -400,6 +400,45 @@ button {
   background: rgba(255, 255, 255, 0.2);
 }
 
+.molecule-menu {
+  position: fixed;
+  z-index: 30;
+  display: grid;
+  gap: 0.32rem;
+  width: 9.75rem;
+  padding: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 0.55rem;
+  background: rgba(38, 48, 50, 0.88);
+  box-shadow: 0 16px 44px rgba(7, 18, 20, 0.32);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.molecule-menu:focus {
+  outline: none;
+}
+
+.molecule-menu button {
+  min-height: 2.35rem;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.94rem;
+}
+
+.molecule-menu button:hover {
+  border-color: rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.molecule-menu .molecule-menu__remove {
+  color: #ffd8d5;
+}
+
 .editor-backdrop {
   position: fixed;
   z-index: 20;
@@ -664,6 +703,7 @@ button {
 .atom-node:focus-visible,
 .done-button:focus-visible,
 .run-button:focus-visible,
+.molecule-menu button:focus-visible,
 .charge-menu button:focus-visible {
   outline: 2px solid white;
   outline-offset: 3px;
