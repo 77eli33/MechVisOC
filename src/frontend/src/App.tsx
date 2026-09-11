@@ -22,7 +22,6 @@ type AtomMappingResult = {
 };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string };
-type ChargeMenuState = { side: Side; moleculeId: string; x: number; y: number };
 type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
 type EditorState = { side: Side; molecule?: Molecule };
 type ApiMolecule = {
@@ -66,6 +65,12 @@ const PlusIcon = () => (
 const CloseIcon = () => (
   <svg aria-hidden="true" viewBox="0 0 24 24">
     <path d="M5 5l14 14M19 5L5 19" />
+  </svg>
+);
+
+const MenuIcon = () => (
+  <svg aria-hidden="true" viewBox="0 0 32 24">
+    <path d="M2 3h28M2 12h28M2 21h28" />
   </svg>
 );
 
@@ -200,28 +205,23 @@ function MoleculeChip({
   side,
   selected,
   onSelect,
-  onOpenChargeMenu,
   onOpenMoleculeMenu,
 }: {
   molecule: Molecule;
   side: Side;
   selected: boolean;
   onSelect: () => void;
-  onOpenChargeMenu: (menu: ChargeMenuState) => void;
   onOpenMoleculeMenu: (menu: MoleculeMenuState) => void;
 }) {
   const label = `${formatFormulaLabel(molecule.formula)}, ${chargeLabel(molecule.charge)} charge`;
   return (
     <button
-      className={`molecule-chip${selected ? " molecule-chip--selected" : ""}`}
+      className="molecule-chip"
       type="button"
-      aria-label={`${label}. Click to edit charge; right-click for edit and remove actions.`}
+      aria-label={`${label}. Click to select; right-click for molecule actions.`}
       aria-pressed={selected}
-      title="Click to edit charge · Right-click for more actions"
-      onClick={(event) => {
-        onSelect();
-        onOpenChargeMenu({ side, moleculeId: molecule.id, x: event.clientX, y: event.clientY });
-      }}
+      title="Click to select · Right-click for molecule actions"
+      onClick={onSelect}
       onContextMenu={(event) => {
         event.preventDefault();
         onSelect();
@@ -248,7 +248,6 @@ function MoleculePanel({
   selectedMoleculeId,
   onSelect,
   onAdd,
-  onOpenChargeMenu,
   onOpenMoleculeMenu,
 }: {
   side: Side;
@@ -257,17 +256,12 @@ function MoleculePanel({
   selectedMoleculeId: string | null;
   onSelect: (molecule: Molecule) => void;
   onAdd: () => void;
-  onOpenChargeMenu: (menu: ChargeMenuState) => void;
   onOpenMoleculeMenu: (menu: MoleculeMenuState) => void;
 }) {
-  const countLabel = molecules.length === 0
-    ? "No molecules yet"
-    : `${molecules.length} ${molecules.length === 1 ? "molecule" : "molecules"}`;
   return (
     <section className="molecule-panel" aria-labelledby={`${side}-title`}>
       <header className="panel-heading">
         <h2 id={`${side}-title`}>{title}</h2>
-        <span>{countLabel}</span>
       </header>
       <div className="molecule-row">
         {molecules.map((molecule, index) => (
@@ -278,7 +272,6 @@ function MoleculePanel({
               side={side}
               selected={selectedMoleculeId === molecule.id}
               onSelect={() => onSelect(molecule)}
-              onOpenChargeMenu={onOpenChargeMenu}
               onOpenMoleculeMenu={onOpenMoleculeMenu}
             />
           </Fragment>
@@ -291,59 +284,49 @@ function MoleculePanel({
   );
 }
 
-function ChargeMenu({
-  menu,
-  molecule,
-  onChange,
-  onClose,
-}: {
-  menu: ChargeMenuState;
-  molecule: Molecule;
-  onChange: (amount: number) => void;
-  onClose: () => void;
-}) {
-  const menuRef = useRef<HTMLDivElement>(null);
+function SideMenu({ onClose }: { onClose: () => void }) {
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
   useEffect(() => {
-    const close = () => onClose();
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && onClose();
-    window.addEventListener("pointerdown", close);
-    window.addEventListener("blur", close);
-    window.addEventListener("keydown", onKey);
-    menuRef.current?.focus();
-    return () => {
-      window.removeEventListener("pointerdown", close);
-      window.removeEventListener("blur", close);
-      window.removeEventListener("keydown", onKey);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
     };
+    window.addEventListener("keydown", onKeyDown);
+    closeButtonRef.current?.focus();
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
   return (
-    <div
-      ref={menuRef}
-      className="charge-menu"
-      role="menu"
-      tabIndex={-1}
-      aria-label="Edit molecule charge"
-      style={{ left: Math.min(menu.x, window.innerWidth - 190), top: Math.min(menu.y, window.innerHeight - 110) }}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <span className="charge-menu__label">Charge</span>
-      <strong>{molecule.charge > 0 ? "+" : ""}{molecule.charge}</strong>
-      <div>
-        <button type="button" role="menuitem" aria-label="Decrease charge" onClick={() => onChange(-1)}>−</button>
-        <button type="button" role="menuitem" aria-label="Increase charge" onClick={() => onChange(1)}>+</button>
-      </div>
+    <div className="side-menu-backdrop" role="presentation" onPointerDown={onClose}>
+      <aside
+        className="side-menu"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="side-menu-title"
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <h2 id="side-menu-title">Menu</h2>
+          <button ref={closeButtonRef} type="button" aria-label="Close menu" onClick={onClose}>
+            <CloseIcon />
+          </button>
+        </header>
+      </aside>
     </div>
   );
 }
 
 function MoleculeMenu({
   menu,
+  molecule,
+  onChangeCharge,
   onEdit,
   onRemove,
   onClose,
 }: {
   menu: MoleculeMenuState;
+  molecule: Molecule;
+  onChangeCharge: (amount: number) => void;
   onEdit: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -370,9 +353,17 @@ function MoleculeMenu({
       role="menu"
       tabIndex={-1}
       aria-label="Molecule actions"
-      style={{ left: Math.min(menu.x, window.innerWidth - 170), top: Math.min(menu.y, window.innerHeight - 108) }}
+      style={{ left: Math.min(menu.x, window.innerWidth - 180), top: Math.min(menu.y, window.innerHeight - 205) }}
       onPointerDown={(event) => event.stopPropagation()}
     >
+      <div className="molecule-menu__charge">
+        <span>Charge</span>
+        <strong>{molecule.charge > 0 ? "+" : ""}{molecule.charge}</strong>
+        <div>
+          <button type="button" role="menuitem" aria-label="Decrease charge" onClick={() => onChangeCharge(-1)}>−</button>
+          <button type="button" role="menuitem" aria-label="Increase charge" onClick={() => onChangeCharge(1)}>+</button>
+        </div>
+      </div>
       <button type="button" role="menuitem" onClick={onEdit}>Edit</button>
       <button type="button" role="menuitem" className="molecule-menu__remove" onClick={onRemove}>Remove</button>
     </div>
@@ -733,16 +724,13 @@ export default function App() {
   const [selectedMoleculeId, setSelectedMoleculeId] = useState<string | null>(null);
   const [buckets, setBuckets] = useState<AtomMappingResult | null>(null);
   const [editorState, setEditorState] = useState<EditorState | null>(null);
-  const [chargeMenu, setChargeMenu] = useState<ChargeMenuState | null>(null);
   const [moleculeMenu, setMoleculeMenu] = useState<MoleculeMenuState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [runError, setRunError] = useState<string | null>(null);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const allMolecules = [...molecules.reactants, ...molecules.products];
   const selectedMolecule = allMolecules.find((molecule) => molecule.id === selectedMoleculeId);
-  const selectedChargeMolecule = chargeMenu
-    ? molecules[chargeMenu.side].find((molecule) => molecule.id === chargeMenu.moleculeId)
-    : undefined;
   const selectedActionMolecule = moleculeMenu
     ? molecules[moleculeMenu.side].find((molecule) => molecule.id === moleculeMenu.moleculeId)
     : undefined;
@@ -769,11 +757,11 @@ export default function App() {
   };
 
   const updateCharge = (amount: number) => {
-    if (!chargeMenu) return;
+    if (!moleculeMenu) return;
     setMolecules((current) => ({
       ...current,
-      [chargeMenu.side]: current[chargeMenu.side].map((molecule) =>
-        molecule.id === chargeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
+      [moleculeMenu.side]: current[moleculeMenu.side].map((molecule) =>
+        molecule.id === moleculeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
       ),
     }));
     setBuckets(null);
@@ -790,13 +778,7 @@ export default function App() {
     setRunError(null);
   };
 
-  const openChargeMenu = (menu: ChargeMenuState) => {
-    setMoleculeMenu(null);
-    setChargeMenu(menu);
-  };
-
   const openMoleculeMenu = (menu: MoleculeMenuState) => {
-    setChargeMenu(null);
     setMoleculeMenu(menu);
   };
 
@@ -854,9 +836,13 @@ export default function App() {
     <main className="app-shell">
       <ShaderBackground />
       <header className="brand-bar glass-panel">
-        <p>ChemiSuite</p>
-        <span aria-hidden="true">·</span>
-        <h1>Mechanism Visualizer</h1>
+        <div className="brand-lockup">
+          <p>ChemiSuite:</p>
+          <h1>Mechanism Visualizer</h1>
+        </div>
+        <button className="header-menu-button" type="button" aria-label="Open menu" onClick={() => setIsMenuOpen(true)}>
+          <MenuIcon />
+        </button>
       </header>
 
       <div className="workspace">
@@ -867,7 +853,6 @@ export default function App() {
           selectedMoleculeId={selectedMoleculeId}
           onSelect={selectMolecule}
           onAdd={() => setEditorState({ side: "reactants" })}
-          onOpenChargeMenu={openChargeMenu}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
         {buckets && <AtomMappingsPanel mappings={buckets.atom_mappings} molecules={molecules} />}
@@ -878,7 +863,6 @@ export default function App() {
           selectedMoleculeId={selectedMoleculeId}
           onSelect={selectMolecule}
           onAdd={() => setEditorState({ side: "products" })}
-          onOpenChargeMenu={openChargeMenu}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
       </div>
@@ -890,12 +874,11 @@ export default function App() {
         </button>
       </div>
 
-      {chargeMenu && selectedChargeMolecule && (
-        <ChargeMenu menu={chargeMenu} molecule={selectedChargeMolecule} onChange={updateCharge} onClose={() => setChargeMenu(null)} />
-      )}
       {moleculeMenu && selectedActionMolecule && (
         <MoleculeMenu
           menu={moleculeMenu}
+          molecule={selectedActionMolecule}
+          onChangeCharge={updateCharge}
           onEdit={() => {
             setEditorState({ side: moleculeMenu.side, molecule: selectedActionMolecule });
             setMoleculeMenu(null);
@@ -912,6 +895,7 @@ export default function App() {
           onSave={(molecule) => saveMolecule(editorState.side, molecule)}
         />
       )}
+      {isMenuOpen && <SideMenu onClose={() => setIsMenuOpen(false)} />}
     </main>
   );
 }
