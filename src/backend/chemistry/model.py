@@ -55,4 +55,12 @@ class Products:
 @dataclass
 class Bucket:
     element_name: str
-    atoms: list[Atom]
+    atoms: list["BucketAtom"]
+
+
+@dataclass(frozen=True)
+class BucketAtom:
+    """An atom reference that remains unique across all reaction molecules."""
+
+    molecule_id: str
+    atom_id: str

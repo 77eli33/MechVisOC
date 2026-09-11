@@ -12,6 +12,9 @@ type Molecule = {
   formula: FormulaPart[];
   charge: number;
 };
+type BucketAtom = { molecule_id: string; atom_id: string };
+type AtomBucket = { element_name: string; atoms: BucketAtom[] };
+type AtomMappingResult = { reactant_buckets: AtomBucket[]; product_buckets: AtomBucket[] };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string };
 type ChargeMenuState = { side: Side; moleculeId: string; x: number; y: number };
@@ -132,7 +135,7 @@ async function requestBackbone(molecule: Molecule): Promise<BackboneAnalysis> {
   return { molecule: fromApiMolecule(body.molecule), backboneAtomIds: body.backbone_atom_ids };
 }
 
-async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): Promise<void> {
+async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): Promise<AtomMappingResult> {
   const reactants: ApiMoleculeCollection = { molecules: molecules.reactants.map(toApiMolecule) };
   const products: ApiMoleculeCollection = { molecules: molecules.products.map(toApiMolecule) };
   const response = await fetch("/api/atom-mapping", {
@@ -144,6 +147,7 @@ async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): 
     const body = await response.json().catch(() => null) as { detail?: string } | null;
     throw new Error(body?.detail ?? "The reaction could not be transferred for atom mapping.");
   }
+  return await response.json() as AtomMappingResult;
 }
 
 function Formula({ parts }: { parts: FormulaPart[] }) {
@@ -413,6 +417,42 @@ function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
   );
 }
 
+function BucketsPanel({ buckets }: { buckets: AtomMappingResult }) {
+  const sides: Array<{ title: string; buckets: AtomBucket[] }> = [
+    { title: "Reactants", buckets: buckets.reactant_buckets },
+    { title: "Products", buckets: buckets.product_buckets },
+  ];
+  return (
+    <section className="molecule-panel buckets-panel" aria-labelledby="buckets-title">
+      <header className="panel-heading">
+        <h2 id="buckets-title">Atom buckets</h2>
+        <span>Grouped by element</span>
+      </header>
+      <div className="bucket-sides">
+        {sides.map((side) => (
+          <div className="bucket-side" key={side.title}>
+            <h3>{side.title}</h3>
+            {side.buckets.length === 0 ? <p>No atoms</p> : side.buckets.map((bucket) => (
+              <div className="atom-bucket" key={bucket.element_name}>
+                <h4>{bucket.element_name}</h4>
+                <ul>
+                  {bucket.atoms.map((atom) => (
+                    <li key={`${atom.molecule_id}:${atom.atom_id}`}>
+                      <code>{atom.molecule_id}</code>
+                      <span> / </span>
+                      <code>{atom.atom_id}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function MoleculeEditor({
   destination,
   initialMolecule,
@@ -586,7 +626,7 @@ function MoleculeEditor({
 export default function App() {
   const [molecules, setMolecules] = useState<Record<Side, Molecule[]>>(emptyMolecules);
   const [selectedMoleculeId, setSelectedMoleculeId] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<BackboneAnalysis | null>(null);
+  const [buckets, setBuckets] = useState<AtomMappingResult | null>(null);
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [chargeMenu, setChargeMenu] = useState<ChargeMenuState | null>(null);
   const [moleculeMenu, setMoleculeMenu] = useState<MoleculeMenuState | null>(null);
@@ -613,14 +653,13 @@ export default function App() {
       };
     });
     setSelectedMoleculeId(molecule.id);
-    setAnalysis(null);
+    setBuckets(null);
     setRunError(null);
     setEditorState(null);
   }, []);
 
   const selectMolecule = (molecule: Molecule) => {
     setSelectedMoleculeId(molecule.id);
-    if (analysis?.molecule.id !== molecule.id) setAnalysis(null);
     setRunError(null);
   };
 
@@ -632,9 +671,7 @@ export default function App() {
         molecule.id === chargeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
       ),
     }));
-    setAnalysis((current) => current?.molecule.id === chargeMenu.moleculeId
-      ? { ...current, molecule: { ...current.molecule, charge: current.molecule.charge + amount } }
-      : current);
+    setBuckets(null);
   };
 
   const removeMolecule = (side: Side, moleculeId: string) => {
@@ -643,7 +680,7 @@ export default function App() {
       [side]: current[side].filter((molecule) => molecule.id !== moleculeId),
     }));
     if (selectedMoleculeId === moleculeId) setSelectedMoleculeId(null);
-    if (analysis?.molecule.id === moleculeId) setAnalysis(null);
+    setBuckets(null);
     setMoleculeMenu(null);
     setRunError(null);
   };
@@ -663,10 +700,9 @@ export default function App() {
     setIsRunning(true);
     setRunError(null);
     try {
-      await sendReactionForAtomMapping(molecules);
-      setAnalysis(await requestBackbone(selectedMolecule));
+      setBuckets(await sendReactionForAtomMapping(molecules));
     } catch (error) {
-      setRunError(error instanceof Error ? error.message : "The backbone analysis could not be completed.");
+      setRunError(error instanceof Error ? error.message : "The atom buckets could not be generated.");
     } finally {
       setIsRunning(false);
     }
@@ -702,7 +738,7 @@ export default function App() {
         const molecule = moleculeFromSymbols(elements, charge);
         setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
         setSelectedMoleculeId(molecule.id);
-        setAnalysis(null);
+        setBuckets(null);
         return { id: molecule.id, side, formula: formatFormulaLabel(molecule.formula), charge };
       },
     }, { signal: lifecycle.signal })).catch(() => undefined);
@@ -729,7 +765,7 @@ export default function App() {
           onOpenChargeMenu={openChargeMenu}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
-        {analysis && <BackbonePanel analysis={analysis} />}
+        {buckets && <BucketsPanel buckets={buckets} />}
         <MoleculePanel
           side="products"
           title="Products"

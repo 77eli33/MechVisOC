@@ -230,6 +230,72 @@ button {
   animation: result-in 300ms ease-out both;
 }
 
+.buckets-panel {
+  min-height: 22rem;
+  border-color: rgba(190, 243, 235, 0.28);
+  animation: result-in 300ms ease-out both;
+}
+
+.bucket-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.4rem;
+}
+
+.bucket-side {
+  min-width: 0;
+  padding: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.35rem;
+  background: rgba(35, 50, 52, 0.32);
+}
+
+.bucket-side h3,
+.atom-bucket h4,
+.bucket-side p {
+  margin: 0;
+}
+
+.bucket-side h3 {
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.bucket-side > p {
+  margin-top: 1rem;
+  color: var(--ink-muted);
+}
+
+.atom-bucket {
+  margin-top: 0.9rem;
+}
+
+.atom-bucket h4 {
+  color: #b9f4ea;
+  font: 600 1rem/1 "Space Mono", monospace;
+}
+
+.atom-bucket ul {
+  display: grid;
+  gap: 0.28rem;
+  margin: 0.45rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.atom-bucket li {
+  overflow-wrap: anywhere;
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+}
+
+.atom-bucket code {
+  color: rgba(255, 255, 255, 0.82);
+  font-family: "Space Mono", monospace;
+}
+
 @keyframes result-in {
   from {
     opacity: 0;

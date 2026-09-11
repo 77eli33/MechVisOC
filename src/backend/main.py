@@ -12,7 +12,7 @@ from .api import (
     to_domain_products,
     to_domain_reactants,
 )
-from .chemistry.mapping import find_backbone
+from .chemistry.mapping import find_backbone, sort_atoms_into_buckets
 
 
 app = FastAPI(title="MechVis API", version="0.1.0")
@@ -43,7 +43,7 @@ def backbone(request: BackboneRequest) -> BackboneResponse:
 
 @app.post("/api/atom-mapping", response_model=AtomMappingResponse)
 def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
-    """Receive the complete reaction assembled in the frontend."""
+    """Receive a reaction and return its element-specific atom buckets."""
     reactants = to_domain_reactants(request.reactants)
     products = to_domain_products(request.products)
     return AtomMappingResponse(
@@ -51,4 +51,6 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
         products=request.products,
         reactant_count=len(reactants.molecules),
         product_count=len(products.molecules),
+        reactant_buckets=sort_atoms_into_buckets(reactants),
+        product_buckets=sort_atoms_into_buckets(products),
     )

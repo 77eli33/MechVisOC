@@ -102,3 +102,10 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
     ]
     assert body["reactant_count"] == 1
     assert body["product_count"] == 1
+    assert body["reactant_buckets"] == [
+        {"element_name": "H", "atoms": [{"molecule_id": "reactant-1", "atom_id": "h-1"}]},
+        {"element_name": "Br", "atoms": [{"molecule_id": "reactant-1", "atom_id": "br-1"}]},
+    ]
+    assert body["product_buckets"] == [
+        {"element_name": "Br", "atoms": [{"molecule_id": "product-1", "atom_id": "br-2"}]}
+    ]

@@ -1,5 +1,44 @@
 """Utilities for deriving atom selections from molecule objects."""
 
+from collections import Counter
+
+from .model import Bucket, BucketAtom, Products, Reactants
+
+
+def validate_reaction(reactants: Reactants, products: Products) -> bool:
+    """Return whether both sides of a reaction contain the same atoms.
+
+    Atom IDs and molecular grouping may change during a reaction, so the
+    comparison is made from the total count of each element across all
+    molecules on each side. Formal charges and bonds are intentionally not
+    considered here.
+    """
+    reactant_atoms = Counter(
+        atom.element
+        for molecule in reactants.molecules
+        for atom in molecule.atoms
+    )
+    product_atoms = Counter(
+        atom.element
+        for molecule in products.molecules
+        for atom in molecule.atoms
+    )
+    return reactant_atoms == product_atoms
+
+
+def sort_atoms_into_buckets(reaction_side: Reactants | Products) -> list[Bucket]:
+    """Group every atom on one reaction side into element-specific buckets.
+
+    Each bucket atom retains both its molecule and atom IDs, since atom IDs
+    are only guaranteed to be unique inside an individual molecule.
+    """
+    buckets: dict[str, Bucket] = {}
+    for molecule in reaction_side.molecules:
+        for atom in molecule.atoms:
+            bucket = buckets.setdefault(atom.element, Bucket(atom.element, []))
+            bucket.atoms.append(BucketAtom(molecule.molecule_id, atom.id))
+    return list(buckets.values())
+
 
 def find_backbone(molecule):
     """Return the longest non-H path starting at the first end atom.
@@ -66,4 +105,3 @@ def find_ends(molecule):
 def find_non_h_atoms(molecule):
     """Return all atoms except hydrogen atoms."""
     return [atom for atom in molecule.atoms if atom.is_non_h()]
-

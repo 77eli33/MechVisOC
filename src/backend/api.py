@@ -3,7 +3,7 @@
 from typing import List
 
 from fastapi import HTTPException
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .chemistry.model import Atom, Bond, Molecule, Products, Reactants
 
@@ -59,11 +59,27 @@ class AtomMappingRequest(BaseModel):
     products: ProductsPayload
 
 
+class BucketAtomPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    molecule_id: str
+    atom_id: str
+
+
+class BucketPayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    element_name: str
+    atoms: List[BucketAtomPayload]
+
+
 class AtomMappingResponse(BaseModel):
     reactants: ReactantsPayload
     products: ProductsPayload
     reactant_count: int
     product_count: int
+    reactant_buckets: List[BucketPayload]
+    product_buckets: List[BucketPayload]
 
 
 def to_domain_molecule(payload: MoleculePayload) -> Molecule:
