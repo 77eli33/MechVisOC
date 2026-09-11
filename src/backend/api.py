@@ -46,6 +46,31 @@ class BackboneResponse(BaseModel):
     backbone_atom_ids: List[str]
 
 
+class AtomNamePayload(BaseModel):
+    id: str
+    element: str = Field(min_length=1, max_length=2)
+
+    @field_validator("element")
+    @classmethod
+    def normalize_element(cls, value: str) -> str:
+        if not value.isalpha():
+            raise ValueError("Element shorthand must contain letters only")
+        return value[0].upper() + value[1:].lower()
+
+
+class AtomValidationRequest(BaseModel):
+    atoms: List[AtomNamePayload] = Field(min_length=1)
+
+
+class ValidationResponse(BaseModel):
+    valid: bool
+    errors: List[str] = Field(default_factory=list)
+
+
+class MoleculeValidationRequest(BaseModel):
+    molecule: MoleculePayload
+
+
 class ReactantsPayload(BaseModel):
     molecules: List[MoleculePayload] = Field(default_factory=list)
 

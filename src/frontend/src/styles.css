@@ -880,6 +880,11 @@ button {
   font-size: 0.9rem;
 }
 
+.editor-footer .editor-validation-error {
+  margin-top: 0.45rem;
+  color: #ffd8d5;
+}
+
 .done-button {
   min-width: 11rem;
   min-height: 3.15rem;

@@ -1,18 +1,23 @@
 """FastAPI entrypoint for MechVis."""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .api import (
+    AtomValidationRequest,
     AtomMappingRequest,
     AtomMappingResponse,
     BackboneRequest,
     BackboneResponse,
+    MoleculeValidationRequest,
+    ValidationResponse,
     to_domain_molecule,
     to_domain_products,
     to_domain_reactants,
 )
-from .chemistry.mapping import find_backbone, map_atoms, sort_atoms_into_buckets
+from .chemistry.mapping import find_backbone, map_atoms, sort_atoms_into_buckets, validate_reaction
+from .chemistry.model import Atom
+from .chemistry.validation import validate_atom_names, validate_molecule
 
 
 app = FastAPI(title="MechVis API", version="0.1.0")
@@ -31,6 +36,20 @@ def health() -> dict:
     return {"status": "ok"}
 
 
+@app.post("/api/validate-atoms", response_model=ValidationResponse)
+def validate_atoms(request: AtomValidationRequest) -> ValidationResponse:
+    """Validate editor atoms without requiring a completed molecule."""
+    errors = validate_atom_names(Atom(atom.id, atom.element) for atom in request.atoms)
+    return ValidationResponse(valid=not errors, errors=errors)
+
+
+@app.post("/api/validate-molecule", response_model=ValidationResponse)
+def validate_completed_molecule(request: MoleculeValidationRequest) -> ValidationResponse:
+    """Validate a molecule before it is added to a reaction side."""
+    errors = validate_molecule(to_domain_molecule(request.molecule))
+    return ValidationResponse(valid=not errors, errors=errors)
+
+
 @app.post("/api/backbone", response_model=BackboneResponse)
 def backbone(request: BackboneRequest) -> BackboneResponse:
     molecule = to_domain_molecule(request.molecule)
@@ -46,6 +65,11 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
     """Receive a reaction and return its element-specific atom buckets."""
     reactants = to_domain_reactants(request.reactants)
     products = to_domain_products(request.products)
+    if not validate_reaction(reactants, products):
+        raise HTTPException(
+            status_code=422,
+            detail="Invalid Reaction: reactants and products must contain exactly the same atoms.",
+        )
     mappings = map_atoms(reactants, products)
     return AtomMappingResponse(
         reactants=request.reactants,

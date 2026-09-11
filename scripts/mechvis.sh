@@ -28,7 +28,7 @@ prepare_dependencies() {
     python3 -m venv "$VENV_DIR"
   fi
 
-  if ! "$VENV_PYTHON" -c "import fastapi, uvicorn, pytest" >/dev/null 2>&1; then
+  if ! "$VENV_PYTHON" -c "import fastapi, uvicorn, pytest, rdkit" >/dev/null 2>&1; then
     say "Installing backend dependencies"
     "$VENV_PYTHON" -m pip install -r "$REPO_ROOT/src/backend/requirements-dev.txt"
   fi

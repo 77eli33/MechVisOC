@@ -33,6 +33,7 @@ type ApiMolecule = {
   bonds: Array<{ atom1_id: string; atom2_id: string; order: number }>;
 };
 type ApiMoleculeCollection = { molecules: ApiMolecule[] };
+type ValidationResult = { valid: boolean; errors: string[] };
 type ModelContext = {
   registerTool: (
     tool: {
@@ -138,6 +139,32 @@ async function requestBackbone(molecule: Molecule): Promise<BackboneAnalysis> {
   }
   const body = await response.json() as { molecule: ApiMolecule; backbone_atom_ids: string[] };
   return { molecule: fromApiMolecule(body.molecule), backboneAtomIds: body.backbone_atom_ids };
+}
+
+async function requestValidation(path: string, body: object, signal?: AbortSignal): Promise<ValidationResult> {
+  const response = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const responseBody = await response.json().catch(() => null) as { detail?: string } | null;
+    throw new Error(typeof responseBody?.detail === "string" ? responseBody.detail : "Validation could not be completed.");
+  }
+  return await response.json() as ValidationResult;
+}
+
+function validateEnteredAtoms(atoms: Atom[], signal?: AbortSignal) {
+  return requestValidation(
+    "/api/validate-atoms",
+    { atoms: atoms.map((atom) => ({ id: atom.id, element: atom.symbol })) },
+    signal,
+  );
+}
+
+function validateCompletedMolecule(molecule: Molecule) {
+  return requestValidation("/api/validate-molecule", { molecule: toApiMolecule(molecule) });
 }
 
 async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): Promise<AtomMappingResult> {
@@ -472,6 +499,8 @@ function MoleculeEditor({
   const [selectedAtomId, setSelectedAtomId] = useState<string | null>(initialMolecule?.atoms[0]?.id ?? null);
   const [pendingAtom, setPendingAtom] = useState<PendingAtom | null>(null);
   const [symbol, setSymbol] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [isValidating, setIsValidating] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const symbolInputRef = useRef<HTMLInputElement>(null);
   const closeTimerRef = useRef<number | null>(null);
@@ -496,26 +525,74 @@ function MoleculeEditor({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      if (pendingAtom) {
-        setPendingAtom(null);
-        setSymbol("");
-      } else {
-        beginClose();
+      if (event.key === "Escape") {
+        if (pendingAtom) {
+          setPendingAtom(null);
+          setSymbol("");
+          setValidationError(null);
+        } else {
+          beginClose();
+        }
+        return;
       }
+
+      if (event.key !== "Backspace" || pendingAtom || !selectedAtomId) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+      event.preventDefault();
+      setAtoms((current) => current.filter((atom) => atom.id !== selectedAtomId));
+      setBonds((current) => current.filter((bond) => bond.from !== selectedAtomId && bond.to !== selectedAtomId));
+      setSelectedAtomId((currentId) => atoms.find((atom) => atom.id !== currentId)?.id ?? null);
+      setValidationError(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [beginClose, pendingAtom]);
+  }, [atoms, beginClose, pendingAtom, selectedAtomId]);
+
+  useEffect(() => {
+    if (!pendingAtom || !symbol) {
+      setValidationError(null);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const candidate = { id: "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y };
+      void validateEnteredAtoms([...atoms, candidate], controller.signal)
+        .then((result) => setValidationError(result.errors[0] ?? null))
+        .catch((error: unknown) => {
+          if (!(error instanceof DOMException && error.name === "AbortError")) {
+            setValidationError(error instanceof Error ? error.message : "Validation could not be completed.");
+          }
+        });
+    }, 200);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [atoms, pendingAtom, symbol]);
 
   const isOccupied = (x: number, y: number) => atoms.some((atom) => atom.x === x && atom.y === y);
   const startAtom = (candidate: PendingAtom) => {
     setPendingAtom(candidate);
     setSymbol("");
+    setValidationError(null);
   };
-  const commitAtom = () => {
-    if (!pendingAtom || !symbol) return;
+  const commitAtom = async () => {
+    if (!pendingAtom || !symbol || isValidating) return;
     const atom: Atom = { id: crypto.randomUUID(), symbol, x: pendingAtom.x, y: pendingAtom.y };
+    setIsValidating(true);
+    setValidationError(null);
+    try {
+      const result = await validateEnteredAtoms([...atoms, atom]);
+      if (!result.valid) {
+        setValidationError(result.errors[0] ?? "This element is not valid.");
+        return;
+      }
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Validation could not be completed.");
+      return;
+    } finally {
+      setIsValidating(false);
+    }
     setAtoms((current) => [...current, atom]);
     if (pendingAtom.parentId) {
       setBonds((current) => [...current, { from: pendingAtom.parentId!, to: atom.id }]);
@@ -525,8 +602,8 @@ function MoleculeEditor({
     setSymbol("");
   };
   const composition = useMemo(() => formulaFromAtoms(atoms), [atoms]);
-  const save = () => {
-    if (atoms.length === 0 || pendingAtom) return;
+  const save = async () => {
+    if (atoms.length === 0 || pendingAtom || isValidating) return;
     const molecule = {
       id: initialMolecule?.id ?? crypto.randomUUID(),
       atoms,
@@ -534,6 +611,20 @@ function MoleculeEditor({
       formula: composition,
       charge: initialMolecule?.charge ?? 0,
     };
+    setIsValidating(true);
+    setValidationError(null);
+    try {
+      const result = await validateCompletedMolecule(molecule);
+      if (!result.valid) {
+        setValidationError(result.errors[0] ?? "This molecule is not valid.");
+        return;
+      }
+    } catch (error) {
+      setValidationError(error instanceof Error ? error.message : "Validation could not be completed.");
+      return;
+    } finally {
+      setIsValidating(false);
+    }
     beginClose(() => onSave(molecule));
   };
 
@@ -609,8 +700,14 @@ function MoleculeEditor({
                 aria-label="Element shorthand"
                 placeholder="X"
                 onChange={(event) => setSymbol(normalizeSymbol(event.target.value))}
-                onKeyDown={(event) => event.key === "Enter" && commitAtom()}
-                onBlur={() => symbol && commitAtom()}
+                aria-invalid={Boolean(validationError)}
+                aria-describedby={validationError ? "editor-validation-error" : undefined}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void commitAtom();
+                }}
+                onBlur={() => {
+                  if (symbol) void commitAtom();
+                }}
               />
               <span>Enter to place</span>
             </div>
@@ -618,8 +715,11 @@ function MoleculeEditor({
         </div>
 
         <footer className="editor-footer">
-          <p>{atoms.length === 0 ? "Start with an atom, then build in four directions." : "Select an atom to extend the structure."}</p>
-          <button className="done-button" type="button" disabled={atoms.length === 0 || Boolean(pendingAtom)} onClick={save}>Done</button>
+          <div>
+            <p>{atoms.length === 0 ? "Start with an atom, then build in four directions." : "Select an atom to extend it, or press Backspace to remove it."}</p>
+            {validationError && <p className="editor-validation-error" id="editor-validation-error" role="alert">{validationError}</p>}
+          </div>
+          <button className="done-button" type="button" disabled={atoms.length === 0 || Boolean(pendingAtom) || isValidating} onClick={() => void save()}>{isValidating ? "Checking…" : "Done"}</button>
         </footer>
       </section>
     </div>
