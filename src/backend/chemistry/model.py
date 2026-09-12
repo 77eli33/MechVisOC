@@ -85,18 +85,17 @@ class AtomRef:
 
 
 @dataclass(frozen=True)
-class AtomBond:
-    """A bond from one mapped atom to another reactant-side atom."""
+class MappedBond:
+    """A canonical bond whose endpoints use reactant-side atom references."""
 
-    partner: AtomRef
+    atom1: AtomRef
+    atom2: AtomRef
     order: int
 
 
 @dataclass(frozen=True)
 class BondDiff:
-    """Changed incident bonds for one mapped reactant atom."""
+    """Reaction-level bond removals and additions."""
 
-    reactant: AtomRef
-    product: AtomRef
-    removed_bonds: tuple[AtomBond, ...]
-    added_bonds: tuple[AtomBond, ...]
+    removed_bonds: tuple[MappedBond, ...]
+    added_bonds: tuple[MappedBond, ...]

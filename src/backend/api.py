@@ -107,20 +107,19 @@ class AtomMappingPayload(BaseModel):
     product: BucketAtomPayload
 
 
-class AtomBondPayload(BaseModel):
+class MappedBondPayload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    partner: BucketAtomPayload
+    atom1: BucketAtomPayload
+    atom2: BucketAtomPayload
     order: int
 
 
 class BondDiffPayload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    reactant: BucketAtomPayload
-    product: BucketAtomPayload
-    removed_bonds: List[AtomBondPayload]
-    added_bonds: List[AtomBondPayload]
+    removed_bonds: List[MappedBondPayload]
+    added_bonds: List[MappedBondPayload]
 
 
 class AtomMappingResponse(BaseModel):
@@ -131,7 +130,7 @@ class AtomMappingResponse(BaseModel):
     reactant_buckets: List[BucketPayload]
     product_buckets: List[BucketPayload]
     atom_mappings: List[AtomMappingPayload]
-    bond_diffs: List[BondDiffPayload]
+    bond_diffs: BondDiffPayload
 
 
 def to_domain_molecule(payload: MoleculePayload) -> Molecule:

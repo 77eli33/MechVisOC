@@ -353,100 +353,105 @@ button {
   animation: result-in 300ms ease-out both;
 }
 
-.bond-diff-list {
-  display: grid;
-  gap: 0.75rem;
+.bond-diffs-empty {
   margin-top: 1.5rem;
-}
-
-.bond-diff-list > p {
-  margin: 0;
   color: var(--ink-muted);
 }
 
-.bond-diff {
+.bond-diff-groups {
   display: grid;
-  grid-template-columns: minmax(10rem, 0.7fr) minmax(14rem, 1.3fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
-  padding: 0.85rem;
+  margin-top: 1.5rem;
+}
+
+.bond-diff-group {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.bond-diff-group h3,
+.bond-diff-group > p {
+  margin: 0;
+}
+
+.bond-diff-group h3 {
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.bond-diff-group--removed h3 {
+  color: #ff9d91;
+}
+
+.bond-diff-group--added h3 {
+  color: #83e7be;
+}
+
+.bond-diff-group > p {
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+}
+
+.bond-change-card {
+  display: grid;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.8rem;
   border: 1px solid rgba(255, 255, 255, 0.12);
+  border-left-width: 3px;
   border-radius: 0.35rem;
   background: rgba(35, 50, 52, 0.32);
 }
 
-.bond-diff__atom {
+.bond-change-card--removed {
+  border-left-color: #ff9d91;
+}
+
+.bond-change-card--added {
+  border-left-color: #83e7be;
+}
+
+.bond-change-card__bond {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  min-width: 0;
+  gap: 0.65rem;
 }
 
-.bond-diff__atom > strong {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  width: 2.7rem;
-  height: 2.7rem;
-  border: 1px solid rgba(185, 244, 234, 0.5);
-  border-radius: 50%;
-  background: rgba(41, 80, 78, 0.66);
+.bond-change-card__bond strong {
   color: #b9f4ea;
-  font: 600 1.15rem/1 "Space Mono", monospace;
+  font: 600 1.25rem/1 "Space Mono", monospace;
 }
 
-.bond-diff__atom span {
-  display: grid;
-  min-width: 0;
+.bond-change-card__bond i {
+  min-width: 2rem;
+  color: rgba(255, 255, 255, 0.78);
+  font: normal 400 1.2rem/1 "Space Mono", monospace;
+  text-align: center;
+}
+
+.bond-change-card > span {
   color: var(--ink-muted);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
 }
 
-.bond-diff__atom code,
-.bond-change code {
-  overflow-wrap: anywhere;
-  color: #e9fffb;
-  font-family: "Space Mono", monospace;
-  font-size: 0.72rem;
-}
-
-.bond-diff__atom small {
-  overflow-wrap: anywhere;
-  margin-top: 0.16rem;
-  color: rgba(255, 255, 255, 0.48);
-}
-
-.bond-diff__changes {
+.bond-change-card__refs {
   display: grid;
-  gap: 0.42rem;
+  gap: 0.18rem;
 }
 
-.bond-change {
-  display: grid;
-  grid-template-columns: 1.25rem minmax(8rem, 1fr) minmax(5rem, auto);
-  align-items: baseline;
-  gap: 0.45rem;
-  margin: 0;
-  padding: 0.42rem 0.55rem;
-  border-radius: 0.25rem;
-  background: rgba(255, 255, 255, 0.035);
-  font-size: 0.8rem;
-}
-
-.bond-change b {
-  font: 600 1.15rem/1 "Space Mono", monospace;
-}
-
-.bond-change--removed b {
-  color: #ff9d91;
-}
-
-.bond-change--added b {
-  color: #83e7be;
-}
-
-.bond-change strong {
-  color: #e9fffb;
+.bond-change-card__refs code {
+  overflow-wrap: anywhere;
+  color: rgba(233, 255, 251, 0.72);
   font-family: "Space Mono", monospace;
+  font-size: 0.68rem;
 }
 
 @keyframes result-in {
@@ -1099,16 +1104,8 @@ button {
     padding-inline: 0.4rem;
   }
 
-  .bond-diff {
+  .bond-diff-groups {
     grid-template-columns: 1fr;
-  }
-
-  .bond-change {
-    grid-template-columns: 1.25rem minmax(0, 1fr);
-  }
-
-  .bond-change code {
-    grid-column: 2;
   }
 
   .editor-dialog {

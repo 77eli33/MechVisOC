@@ -170,7 +170,7 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
     reactant = {
         "id": "reactant-1",
         "name": "HBr",
-        "charge": 0,
+        "charge": -1,
         "atoms": [
             {"id": "h-1", "element": "H", "x": 0, "y": 0},
             {"id": "br-1", "element": "Br", "x": 1, "y": 0},
@@ -234,7 +234,7 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
             "product": {"molecule_id": "product-1", "atom_id": "br-2"},
         }
     ]
-    assert body["bond_diffs"] == []
+    assert body["bond_diffs"] == {"removed_bonds": [], "added_bonds": []}
 
 
 def test_atom_mapping_returns_bond_diffs() -> None:
@@ -257,32 +257,18 @@ def test_atom_mapping_returns_bond_diffs() -> None:
     )
 
     assert response.status_code == 200
-    assert response.json()["bond_diffs"] == [
-        {
-            "reactant": {"molecule_id": "reactant", "atom_id": "reactant-c"},
-            "product": {"molecule_id": "product", "atom_id": "product-c"},
-            "removed_bonds": [{
-                "partner": {"molecule_id": "reactant", "atom_id": "reactant-o"},
-                "order": 1,
-            }],
-            "added_bonds": [{
-                "partner": {"molecule_id": "reactant", "atom_id": "reactant-o"},
-                "order": 2,
-            }],
-        },
-        {
-            "reactant": {"molecule_id": "reactant", "atom_id": "reactant-o"},
-            "product": {"molecule_id": "product", "atom_id": "product-o"},
-            "removed_bonds": [{
-                "partner": {"molecule_id": "reactant", "atom_id": "reactant-c"},
-                "order": 1,
-            }],
-            "added_bonds": [{
-                "partner": {"molecule_id": "reactant", "atom_id": "reactant-c"},
-                "order": 2,
-            }],
-        },
-    ]
+    assert response.json()["bond_diffs"] == {
+        "removed_bonds": [{
+            "atom1": {"molecule_id": "reactant", "atom_id": "reactant-c"},
+            "atom2": {"molecule_id": "reactant", "atom_id": "reactant-o"},
+            "order": 1,
+        }],
+        "added_bonds": [{
+            "atom1": {"molecule_id": "reactant", "atom_id": "reactant-c"},
+            "atom2": {"molecule_id": "reactant", "atom_id": "reactant-o"},
+            "order": 2,
+        }],
+    }
 
 
 def test_atom_mapping_rejects_reaction_with_different_atoms() -> None:
@@ -305,8 +291,31 @@ def test_atom_mapping_rejects_reaction_with_different_atoms() -> None:
 
     assert response.status_code == 422
     assert response.json() == {
-        "detail": "Invalid Reaction: reactants and products must contain exactly the same atoms."
+        "detail": (
+            "Invalid Reaction: reactants and products must contain exactly "
+            "the same atoms and total charge."
+        )
     }
+
+
+def test_atom_mapping_rejects_reaction_with_different_total_charge() -> None:
+    def charged_molecule(side: str, charge: int) -> dict:
+        return {
+            "id": side,
+            "charge": charge,
+            "atoms": [{"id": f"{side}-cl", "element": "Cl", "x": 0, "y": 0}],
+        }
+
+    response = client.post(
+        "/api/atom-mapping",
+        json={
+            "reactants": {"molecules": [charged_molecule("reactant", -1)]},
+            "products": {"molecules": [charged_molecule("product", 0)]},
+        },
+    )
+
+    assert response.status_code == 422
+    assert "total charge" in response.json()["detail"]
 
 
 def test_atom_mapping_reports_invalid_rdkit_input_as_validation_error() -> None:

@@ -5,7 +5,7 @@ from collections import Counter
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 
-from .model import AtomBond, AtomRef, BondDiff, Bucket, BucketAtom, Products, Reactants
+from .model import AtomRef, BondDiff, Bucket, BucketAtom, MappedBond, Products, Reactants
 from .rdkit_service import (
     RDKitReactionSide,
     from_rdkit_atom_mapping,
@@ -14,12 +14,13 @@ from .rdkit_service import (
 
 
 def validate_reaction(reactants: Reactants, products: Products) -> bool:
-    """Return whether both sides of a reaction contain the same atoms.
+    """Return whether both sides conserve atoms and total electric charge.
 
     Atom IDs and molecular grouping may change during a reaction, so the
     comparison is made from the total count of each element across all
-    molecules on each side. Formal charges and bonds are intentionally not
-    considered here.
+    molecules on each side. Charge is likewise compared as the sum of all
+    molecule charges on each side. Bonds and individual formal-charge
+    locations are intentionally not considered here.
     """
     reactant_atoms = Counter(
         atom.element
@@ -31,7 +32,9 @@ def validate_reaction(reactants: Reactants, products: Products) -> bool:
         for molecule in products.molecules
         for atom in molecule.atoms
     )
-    return reactant_atoms == product_atoms
+    reactant_charge = sum(molecule.charge for molecule in reactants.molecules)
+    product_charge = sum(molecule.charge for molecule in products.molecules)
+    return reactant_atoms == product_atoms and reactant_charge == product_charge
 
 
 def sort_atoms_into_buckets(reaction_side: Reactants | Products) -> list[Bucket]:
@@ -58,7 +61,9 @@ def map_atoms(reactants: Reactants, products: Products) -> dict[AtomRef, AtomRef
     never escape the backend service boundary.
     """
     if not validate_reaction(reactants, products):
-        raise ValueError("Reactants and products must contain exactly the same atoms")
+        raise ValueError(
+            "Reactants and products must contain exactly the same atoms and total charge"
+        )
 
     rdkit_reactants = to_rdkit_reaction_side(reactants)
     rdkit_products = to_rdkit_reaction_side(products)
@@ -77,80 +82,68 @@ def get_bond_diffs(
     reactants: Reactants,
     products: Products,
     atom_mapping: dict[AtomRef, AtomRef] | None = None,
-) -> list[BondDiff]:
-    """Return mapped reactant atoms whose incident bonds changed.
+) -> BondDiff:
+    """Return the canonical bonds removed from and added to the reaction.
 
     Product bond endpoints are translated back to reactant atom references
-    before comparison. This makes a bond compare equal only when both its
-    mapped partner and order are unchanged. A bond-order change therefore
-    appears as one removed bond and one added bond to the same partner, while
-    a partner change appears as a removal and addition involving different
-    atoms.
+    before comparison. Each undirected bond is stored with its endpoints in
+    sorted order, so endpoint order in the input cannot create a false diff.
+    A bond-order change appears as one removed bond and one added bond.
     """
     mapping = atom_mapping if atom_mapping is not None else map_atoms(reactants, products)
-    reactant_bonds = _incident_bonds(reactants)
-    product_bonds = _incident_bonds(products)
     inverse_mapping = {product: reactant for reactant, product in mapping.items()}
 
     if len(inverse_mapping) != len(mapping):
         raise ValueError("Atom mapping must map reactant atoms one-to-one")
 
-    diffs: list[BondDiff] = []
-    for reactant, product in mapping.items():
-        if reactant not in reactant_bonds:
-            raise ValueError(f"Atom mapping references unknown reactant atom '{reactant.atom_id}'")
-        if product not in product_bonds:
-            raise ValueError(f"Atom mapping references unknown product atom '{product.atom_id}'")
-
-        before = {
-            AtomBond(partner, order)
-            for partner, order in reactant_bonds[reactant].items()
-        }
-        after: set[AtomBond] = set()
-        for product_partner, order in product_bonds[product].items():
-            reactant_partner = inverse_mapping.get(product_partner)
-            if reactant_partner is None:
-                raise ValueError(
-                    f"Atom mapping is missing product atom '{product_partner.atom_id}'"
-                )
-            after.add(AtomBond(reactant_partner, order))
-
-        removed = before - after
-        added = after - before
-        if removed or added:
-            diffs.append(
-                BondDiff(
-                    reactant=reactant,
-                    product=product,
-                    removed_bonds=tuple(sorted(removed, key=_atom_bond_sort_key)),
-                    added_bonds=tuple(sorted(added, key=_atom_bond_sort_key)),
-                )
-            )
-    return diffs
-
-
-def _incident_bonds(
-    reaction_side: Reactants | Products,
-) -> dict[AtomRef, dict[AtomRef, int]]:
-    """Index each atom's directly bonded partners and bond orders."""
-    bonds_by_atom = {
-        AtomRef(molecule.molecule_id, atom.id): {}
-        for molecule in reaction_side.molecules
-        for atom in molecule.atoms
+    reactant_bonds = {
+        _canonical_bond(
+            AtomRef(molecule.molecule_id, bond.atom1_id),
+            AtomRef(molecule.molecule_id, bond.atom2_id),
+            bond.order,
+        )
+        for molecule in reactants.molecules
+        for bond in molecule.bonds
     }
-    for molecule in reaction_side.molecules:
+    product_bonds: set[MappedBond] = set()
+    for molecule in products.molecules:
         for bond in molecule.bonds:
-            atom1 = AtomRef(molecule.molecule_id, bond.atom1_id)
-            atom2 = AtomRef(molecule.molecule_id, bond.atom2_id)
-            if atom1 not in bonds_by_atom or atom2 not in bonds_by_atom:
-                raise ValueError("Every bond endpoint must reference an atom in its molecule")
-            bonds_by_atom[atom1][atom2] = bond.order
-            bonds_by_atom[atom2][atom1] = bond.order
-    return bonds_by_atom
+            product_atom1 = AtomRef(molecule.molecule_id, bond.atom1_id)
+            product_atom2 = AtomRef(molecule.molecule_id, bond.atom2_id)
+            try:
+                atom1 = inverse_mapping[product_atom1]
+                atom2 = inverse_mapping[product_atom2]
+            except KeyError as error:
+                missing_atom = error.args[0]
+                raise ValueError(
+                    f"Atom mapping is missing product atom '{missing_atom.atom_id}'"
+                ) from error
+            product_bonds.add(_canonical_bond(atom1, atom2, bond.order))
+
+    return BondDiff(
+        removed_bonds=tuple(sorted(reactant_bonds - product_bonds, key=_mapped_bond_sort_key)),
+        added_bonds=tuple(sorted(product_bonds - reactant_bonds, key=_mapped_bond_sort_key)),
+    )
 
 
-def _atom_bond_sort_key(bond: AtomBond) -> tuple[str, str, int]:
-    return bond.partner.molecule_id, bond.partner.atom_id, bond.order
+def _canonical_bond(atom1: AtomRef, atom2: AtomRef, order: int) -> MappedBond:
+    """Store an undirected bond in a deterministic endpoint order."""
+    first, second = sorted((atom1, atom2), key=_atom_ref_sort_key)
+    return MappedBond(first, second, order)
+
+
+def _atom_ref_sort_key(atom: AtomRef) -> tuple[str, str]:
+    return atom.atom_id, atom.molecule_id
+
+
+def _mapped_bond_sort_key(bond: MappedBond) -> tuple[str, str, str, str, int]:
+    return (
+        bond.atom1.atom_id,
+        bond.atom1.molecule_id,
+        bond.atom2.atom_id,
+        bond.atom2.molecule_id,
+        bond.order,
+    )
 
 
 def _map_rdkit_atoms(
