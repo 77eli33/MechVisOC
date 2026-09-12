@@ -71,6 +71,10 @@ class MoleculeValidationRequest(BaseModel):
     molecule: MoleculePayload
 
 
+class MoleculeValidationResponse(ValidationResponse):
+    molecule: MoleculePayload | None = None
+
+
 class ReactantsPayload(BaseModel):
     molecules: List[MoleculePayload] = Field(default_factory=list)
 

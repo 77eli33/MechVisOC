@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import ShaderBackground from "./ShaderBackground";
 
 type Side = "reactants" | "products";
-type Atom = { id: string; symbol: string; x: number; y: number };
+type Atom = { id: string; symbol: string; x: number; y: number; formalCharge: number };
 type BondOrder = 1 | 2 | 3;
 type Bond = { from: string; to: string; order: BondOrder };
 type FormulaPart = { symbol: string; count: number };
@@ -33,7 +33,7 @@ type ApiMolecule = {
   bonds: Array<{ atom1_id: string; atom2_id: string; order: number }>;
 };
 type ApiMoleculeCollection = { molecules: ApiMolecule[] };
-type ValidationResult = { valid: boolean; errors: string[] };
+type ValidationResult = { valid: boolean; errors: string[]; molecule?: ApiMolecule | null };
 type ModelContext = {
   registerTool: (
     tool: {
@@ -107,7 +107,7 @@ function formulaFromAtoms(atoms: Atom[]) {
 }
 
 function moleculeFromSymbols(symbols: string[], charge = 0): Molecule {
-  const atoms = symbols.map((symbol, index) => ({ id: crypto.randomUUID(), symbol, x: index, y: 0 }));
+  const atoms = symbols.map((symbol, index) => ({ id: crypto.randomUUID(), symbol, x: index, y: 0, formalCharge: 0 }));
   return {
     id: crypto.randomUUID(),
     atoms,
@@ -127,14 +127,20 @@ function toApiMolecule(molecule: Molecule): ApiMolecule {
       element: atom.symbol,
       x: atom.x,
       y: atom.y,
-      formal_charge: 0,
+      formal_charge: atom.formalCharge,
     })),
     bonds: molecule.bonds.map((bond) => ({ atom1_id: bond.from, atom2_id: bond.to, order: bond.order })),
   };
 }
 
 function fromApiMolecule(molecule: ApiMolecule): Molecule {
-  const atoms = molecule.atoms.map((atom) => ({ id: atom.id, symbol: atom.element, x: atom.x, y: atom.y }));
+  const atoms = molecule.atoms.map((atom) => ({
+    id: atom.id,
+    symbol: atom.element,
+    x: atom.x,
+    y: atom.y,
+    formalCharge: atom.formal_charge,
+  }));
   return {
     id: molecule.id,
     atoms,
@@ -180,7 +186,7 @@ function validateEnteredAtoms(atoms: Atom[], signal?: AbortSignal) {
   );
 }
 
-function validateCompletedMolecule(molecule: Molecule) {
+function validateCompletedMolecule(molecule: Molecule): Promise<ValidationResult> {
   return requestValidation("/api/validate-molecule", { molecule: toApiMolecule(molecule) });
 }
 
@@ -574,7 +580,7 @@ function MoleculeEditor({
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const candidate = { id: pendingAtom.atomId ?? "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y };
+      const candidate = { id: pendingAtom.atomId ?? "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y, formalCharge: 0 };
       const candidateAtoms = pendingAtom.atomId
         ? atoms.map((atom) => atom.id === pendingAtom.atomId ? candidate : atom)
         : [...atoms, candidate];
@@ -605,6 +611,7 @@ function MoleculeEditor({
       symbol,
       x: pendingAtom.x,
       y: pendingAtom.y,
+      formalCharge: 0,
     };
     const candidateAtoms = pendingAtom.atomId
       ? atoms.map((current) => current.id === pendingAtom.atomId ? atom : current)
@@ -646,7 +653,7 @@ function MoleculeEditor({
   const composition = useMemo(() => formulaFromAtoms(atoms), [atoms]);
   const save = async () => {
     if (atoms.length === 0 || pendingAtom || isValidating) return;
-    const molecule = {
+    let molecule = {
       id: initialMolecule?.id ?? crypto.randomUUID(),
       atoms,
       bonds,
@@ -661,6 +668,11 @@ function MoleculeEditor({
         setValidationError(result.errors[0] ?? "This molecule is not valid.");
         return;
       }
+      if (!result.molecule) {
+        setValidationError("Validation did not return the normalized molecule.");
+        return;
+      }
+      molecule = fromApiMolecule(result.molecule);
     } catch (error) {
       setValidationError(error instanceof Error ? error.message : "Validation could not be completed.");
       return;

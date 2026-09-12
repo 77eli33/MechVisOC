@@ -52,16 +52,69 @@ def test_validate_molecule_accepts_connected_atoms() -> None:
             "molecule": {
                 "id": "connected-molecule",
                 "atoms": [
-                    {"id": "c-1", "element": "C", "x": 0, "y": 0},
-                    {"id": "o-1", "element": "O", "x": 1, "y": 0},
+                    {"id": "h-1", "element": "H", "x": -1, "y": 0},
+                    {"id": "o-1", "element": "O", "x": 0, "y": 0},
+                    {"id": "h-2", "element": "H", "x": 1, "y": 0},
                 ],
-                "bonds": [{"atom1_id": "c-1", "atom2_id": "o-1"}],
+                "bonds": [
+                    {"atom1_id": "h-1", "atom2_id": "o-1"},
+                    {"atom1_id": "o-1", "atom2_id": "h-2"},
+                ],
             }
         },
     )
 
     assert response.status_code == 200
-    assert response.json() == {"valid": True, "errors": []}
+    body = response.json()
+    assert body["valid"] is True
+    assert body["errors"] == []
+    assert body["molecule"]["charge"] == 0
+
+
+def test_validate_molecule_infers_and_returns_hydroxide_charge() -> None:
+    response = client.post(
+        "/api/validate-molecule",
+        json={
+            "molecule": {
+                "id": "hydroxide",
+                "atoms": [
+                    {"id": "o-1", "element": "O", "x": 0, "y": 0},
+                    {"id": "h-1", "element": "H", "x": 1, "y": 0},
+                ],
+                "bonds": [{"atom1_id": "o-1", "atom2_id": "h-1"}],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert body["molecule"]["charge"] == -1
+    assert [atom["formal_charge"] for atom in body["molecule"]["atoms"]] == [-1, 0]
+
+
+def test_validate_molecule_rejects_an_over_bonded_hydrogen() -> None:
+    response = client.post(
+        "/api/validate-molecule",
+        json={
+            "molecule": {
+                "id": "invalid-hydrogen",
+                "atoms": [
+                    {"id": "o-1", "element": "O", "x": -1, "y": 0},
+                    {"id": "h-1", "element": "H", "x": 0, "y": 0},
+                    {"id": "o-2", "element": "O", "x": 1, "y": 0},
+                ],
+                "bonds": [
+                    {"atom1_id": "o-1", "atom2_id": "h-1"},
+                    {"atom1_id": "h-1", "atom2_id": "o-2"},
+                ],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["valid"] is False
+    assert "electron shell capacity" in response.json()["errors"][0]
 
 
 def test_backbone_returns_heavy_atom_path_and_original_geometry() -> None:

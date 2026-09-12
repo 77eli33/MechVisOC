@@ -10,6 +10,7 @@ from .api import (
     BackboneRequest,
     BackboneResponse,
     MoleculeValidationRequest,
+    MoleculeValidationResponse,
     ValidationResponse,
     to_domain_molecule,
     to_domain_products,
@@ -17,7 +18,7 @@ from .api import (
 )
 from .chemistry.mapping import find_backbone, map_atoms, sort_atoms_into_buckets, validate_reaction
 from .chemistry.model import Atom
-from .chemistry.validation import validate_atom_names, validate_molecule
+from .chemistry.validation import validate_atom_names, validate_electron_configuration
 
 
 app = FastAPI(title="MechVis API", version="0.1.0")
@@ -43,11 +44,24 @@ def validate_atoms(request: AtomValidationRequest) -> ValidationResponse:
     return ValidationResponse(valid=not errors, errors=errors)
 
 
-@app.post("/api/validate-molecule", response_model=ValidationResponse)
-def validate_completed_molecule(request: MoleculeValidationRequest) -> ValidationResponse:
+@app.post("/api/validate-molecule", response_model=MoleculeValidationResponse)
+def validate_completed_molecule(request: MoleculeValidationRequest) -> MoleculeValidationResponse:
     """Validate a molecule before it is added to a reaction side."""
-    errors = validate_molecule(to_domain_molecule(request.molecule))
-    return ValidationResponse(valid=not errors, errors=errors)
+    molecule, errors = validate_electron_configuration(to_domain_molecule(request.molecule))
+    if molecule is None:
+        return MoleculeValidationResponse(valid=False, errors=errors)
+
+    atoms_by_id = {atom.id: atom for atom in molecule.atoms}
+    normalized_payload = request.molecule.model_copy(
+        update={
+            "charge": molecule.charge,
+            "atoms": [
+                atom.model_copy(update={"formal_charge": atoms_by_id[atom.id].formal_charge})
+                for atom in request.molecule.atoms
+            ],
+        }
+    )
+    return MoleculeValidationResponse(valid=True, errors=[], molecule=normalized_payload)
 
 
 @app.post("/api/backbone", response_model=BackboneResponse)
