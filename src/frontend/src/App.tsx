@@ -3,7 +3,8 @@ import ShaderBackground from "./ShaderBackground";
 
 type Side = "reactants" | "products";
 type Atom = { id: string; symbol: string; x: number; y: number };
-type Bond = { from: string; to: string };
+type BondOrder = 1 | 2 | 3;
+type Bond = { from: string; to: string; order: BondOrder };
 type FormulaPart = { symbol: string; count: number };
 type Molecule = {
   id: string;
@@ -21,7 +22,7 @@ type AtomMappingResult = {
   atom_mappings: AtomMapping[];
 };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
-type PendingAtom = { x: number; y: number; parentId?: string };
+type PendingAtom = { x: number; y: number; parentId?: string; atomId?: string };
 type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
 type EditorState = { side: Side; molecule?: Molecule };
 type ApiMolecule = {
@@ -59,6 +60,11 @@ const directions = [
 const EDITOR_PLANE_SIZE = 6720;
 const EDITOR_PLANE_CENTER = EDITOR_PLANE_SIZE / 2;
 const EDITOR_ATOM_STEP = 112;
+const BOND_LINE_OFFSETS: Record<BondOrder, number[]> = {
+  1: [0],
+  2: [-4, 4],
+  3: [-7, 0, 7],
+};
 
 const emptyMolecules: Record<Side, Molecule[]> = { reactants: [], products: [] };
 
@@ -105,7 +111,7 @@ function moleculeFromSymbols(symbols: string[], charge = 0): Molecule {
   return {
     id: crypto.randomUUID(),
     atoms,
-    bonds: atoms.slice(1).map((atom, index) => ({ from: atoms[index].id, to: atom.id })),
+    bonds: atoms.slice(1).map((atom, index) => ({ from: atoms[index].id, to: atom.id, order: 1 })),
     formula: formulaFromAtoms(atoms),
     charge,
   };
@@ -123,7 +129,7 @@ function toApiMolecule(molecule: Molecule): ApiMolecule {
       y: atom.y,
       formal_charge: 0,
     })),
-    bonds: molecule.bonds.map((bond) => ({ atom1_id: bond.from, atom2_id: bond.to, order: 1 })),
+    bonds: molecule.bonds.map((bond) => ({ atom1_id: bond.from, atom2_id: bond.to, order: bond.order })),
   };
 }
 
@@ -132,7 +138,7 @@ function fromApiMolecule(molecule: ApiMolecule): Molecule {
   return {
     id: molecule.id,
     atoms,
-    bonds: molecule.bonds.map((bond) => ({ from: bond.atom1_id, to: bond.atom2_id })),
+    bonds: molecule.bonds.map((bond) => ({ from: bond.atom1_id, to: bond.atom2_id, order: bond.order as BondOrder })),
     formula: formulaFromAtoms(atoms),
     charge: molecule.charge,
   };
@@ -568,8 +574,11 @@ function MoleculeEditor({
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const candidate = { id: "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y };
-      void validateEnteredAtoms([...atoms, candidate], controller.signal)
+      const candidate = { id: pendingAtom.atomId ?? "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y };
+      const candidateAtoms = pendingAtom.atomId
+        ? atoms.map((atom) => atom.id === pendingAtom.atomId ? candidate : atom)
+        : [...atoms, candidate];
+      void validateEnteredAtoms(candidateAtoms, controller.signal)
         .then((result) => setValidationError(result.errors[0] ?? null))
         .catch((error: unknown) => {
           if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -584,18 +593,26 @@ function MoleculeEditor({
   }, [atoms, pendingAtom, symbol]);
 
   const isOccupied = (x: number, y: number) => atoms.some((atom) => atom.x === x && atom.y === y);
-  const startAtom = (candidate: PendingAtom) => {
+  const startAtom = (candidate: PendingAtom, initialSymbol = "") => {
     setPendingAtom(candidate);
-    setSymbol("");
+    setSymbol(initialSymbol);
     setValidationError(null);
   };
   const commitAtom = async () => {
     if (!pendingAtom || !symbol || isValidating) return;
-    const atom: Atom = { id: crypto.randomUUID(), symbol, x: pendingAtom.x, y: pendingAtom.y };
+    const atom: Atom = {
+      id: pendingAtom.atomId ?? crypto.randomUUID(),
+      symbol,
+      x: pendingAtom.x,
+      y: pendingAtom.y,
+    };
+    const candidateAtoms = pendingAtom.atomId
+      ? atoms.map((current) => current.id === pendingAtom.atomId ? atom : current)
+      : [...atoms, atom];
     setIsValidating(true);
     setValidationError(null);
     try {
-      const result = await validateEnteredAtoms([...atoms, atom]);
+      const result = await validateEnteredAtoms(candidateAtoms);
       if (!result.valid) {
         setValidationError(result.errors[0] ?? "This element is not valid.");
         return;
@@ -606,13 +623,25 @@ function MoleculeEditor({
     } finally {
       setIsValidating(false);
     }
-    setAtoms((current) => [...current, atom]);
-    if (pendingAtom.parentId) {
-      setBonds((current) => [...current, { from: pendingAtom.parentId!, to: atom.id }]);
+    if (pendingAtom.atomId) {
+      setAtoms(candidateAtoms);
+    } else {
+      setAtoms((current) => [...current, atom]);
+    }
+    if (pendingAtom.parentId && !pendingAtom.atomId) {
+      setBonds((current) => [...current, { from: pendingAtom.parentId!, to: atom.id, order: 1 }]);
     }
     setSelectedAtomId(atom.id);
     setPendingAtom(null);
     setSymbol("");
+  };
+  const cycleBondOrder = (bondToCycle: Bond) => {
+    setBonds((current) => current.map((bond) => (
+      bond.from === bondToCycle.from && bond.to === bondToCycle.to
+        ? { ...bond, order: (bond.order === 3 ? 1 : bond.order + 1) as BondOrder }
+        : bond
+    )));
+    setValidationError(null);
   };
   const composition = useMemo(() => formulaFromAtoms(atoms), [atoms]);
   const save = async () => {
@@ -668,18 +697,61 @@ function MoleculeEditor({
                 if (!from || !to) return null;
                 const fromPosition = editorPosition(from.x, from.y);
                 const toPosition = editorPosition(to.x, to.y);
-                return <line key={`${bond.from}-${bond.to}`} x1={fromPosition.left} y1={fromPosition.top} x2={toPosition.left} y2={toPosition.top} />;
+                const deltaX = toPosition.left - fromPosition.left;
+                const deltaY = toPosition.top - fromPosition.top;
+                const length = Math.hypot(deltaX, deltaY) || 1;
+                const normalX = -deltaY / length;
+                const normalY = deltaX / length;
+                const orderName = bond.order === 1 ? "single" : bond.order === 2 ? "double" : "triple";
+                const cycleBond = () => cycleBondOrder(bond);
+                return (
+                  <g
+                    key={`${bond.from}-${bond.to}`}
+                    className="bond-control"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${orderName} bond from ${from.symbol} to ${to.symbol}. Activate to change bond order.`}
+                    onClick={cycleBond}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        cycleBond();
+                      }
+                    }}
+                  >
+                    <line
+                      className="bond-hit-area"
+                      x1={fromPosition.left}
+                      y1={fromPosition.top}
+                      x2={toPosition.left}
+                      y2={toPosition.top}
+                    />
+                    {BOND_LINE_OFFSETS[bond.order].map((offset) => (
+                      <line
+                        className="bond-stroke"
+                        key={offset}
+                        x1={fromPosition.left + normalX * offset}
+                        y1={fromPosition.top + normalY * offset}
+                        x2={toPosition.left + normalX * offset}
+                        y2={toPosition.top + normalY * offset}
+                      />
+                    ))}
+                  </g>
+                );
               })}
             </svg>
 
-            {atoms.map((atom) => (
+            {atoms.filter((atom) => atom.id !== pendingAtom?.atomId).map((atom) => (
               <button
                 key={atom.id}
                 type="button"
                 className={`atom-node${selectedAtomId === atom.id ? " atom-node--selected" : ""}`}
                 style={editorPosition(atom.x, atom.y)}
-                aria-label={`${atom.symbol} atom. Select to add a bonded atom.`}
-                onClick={() => setSelectedAtomId(atom.id)}
+                aria-label={`${atom.symbol} atom. Edit element and select to add a bonded atom.`}
+                onClick={() => {
+                  setSelectedAtomId(atom.id);
+                  startAtom({ x: atom.x, y: atom.y, atomId: atom.id }, atom.symbol);
+                }}
               >
                 {atom.symbol}
               </button>

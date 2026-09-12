@@ -877,16 +877,37 @@ button {
 
 .bond-layer {
   position: absolute;
+  z-index: 2;
   inset: 0;
   width: 100%;
   height: 100%;
   overflow: visible;
+  pointer-events: none;
 }
 
-.bond-layer line {
+.bond-stroke {
   stroke: rgba(255, 255, 255, 0.86);
   stroke-width: 1.4;
   vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+
+.bond-control {
+  cursor: pointer;
+  outline: none;
+  pointer-events: auto;
+}
+
+.bond-hit-area {
+  stroke: transparent;
+  stroke-width: 22;
+  vector-effect: non-scaling-stroke;
+}
+
+.bond-control:hover .bond-stroke,
+.bond-control:focus .bond-stroke {
+  stroke: white;
+  stroke-width: 2.2;
 }
 
 .atom-node,
