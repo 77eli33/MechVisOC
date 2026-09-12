@@ -54,6 +54,12 @@ const directions = [
   { x: -1, y: 0, label: "to the left" },
 ];
 
+// Keep the working plane large enough to feel unbounded while retaining native,
+// accessible scrolling. Atom positions land on every fourth background dot.
+const EDITOR_PLANE_SIZE = 6720;
+const EDITOR_PLANE_CENTER = EDITOR_PLANE_SIZE / 2;
+const EDITOR_ATOM_STEP = 112;
+
 const emptyMolecules: Record<Side, Molecule[]> = { reactants: [], products: [] };
 
 const PlusIcon = () => (
@@ -477,12 +483,10 @@ function AtomMappingsPanel({ mappings, molecules }: { mappings: AtomMapping[]; m
 }
 
 function MoleculeEditor({
-  destination,
   initialMolecule,
   onClose,
   onSave,
 }: {
-  destination: Side;
   initialMolecule?: Molecule;
   onClose: () => void;
   onSave: (molecule: Molecule) => void;
@@ -496,8 +500,14 @@ function MoleculeEditor({
   const [isValidating, setIsValidating] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const symbolInputRef = useRef<HTMLInputElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
   const closeTimerRef = useRef<number | null>(null);
   const selectedAtom = atoms.find((atom) => atom.id === selectedAtomId);
+
+  const editorPosition = (x: number, y: number) => ({
+    left: EDITOR_PLANE_CENTER + x * EDITOR_ATOM_STEP,
+    top: EDITOR_PLANE_CENTER + y * EDITOR_ATOM_STEP,
+  });
 
   const beginClose = useCallback((afterClose?: () => void) => {
     if (isClosing) return;
@@ -510,6 +520,16 @@ function MoleculeEditor({
 
   useEffect(() => () => {
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+  }, []);
+
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const stage = stageRef.current;
+      if (!stage) return;
+      stage.scrollLeft = EDITOR_PLANE_CENTER - stage.clientWidth / 2;
+      stage.scrollTop = EDITOR_PLANE_CENTER - stage.clientHeight / 2;
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {
@@ -625,93 +645,104 @@ function MoleculeEditor({
     <div className={`editor-backdrop${isClosing ? " editor-backdrop--closing" : ""}`} role="presentation">
       <section className="editor-dialog" role="dialog" aria-modal="true" aria-labelledby="editor-title">
         <header className="editor-heading">
-          <div>
-            <p>{destination === "reactants" ? "Reactants" : "Products"}</p>
-            <h2 id="editor-title">{initialMolecule ? "Edit Molecule" : "Molecule Editor"}</h2>
-          </div>
+          <h2 id="editor-title">Molecule Editor</h2>
           <button className="icon-button" type="button" aria-label="Close molecule editor" onClick={() => beginClose()}>
             <CloseIcon />
           </button>
         </header>
 
-        <div className="editor-stage" aria-label="Molecule canvas">
-          <svg className="bond-layer" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            {bonds.map((bond) => {
-              const from = atoms.find((atom) => atom.id === bond.from);
-              const to = atoms.find((atom) => atom.id === bond.to);
-              if (!from || !to) return null;
-              return <line key={`${bond.from}-${bond.to}`} x1={50 + from.x * 14} y1={50 + from.y * 20} x2={50 + to.x * 14} y2={50 + to.y * 20} />;
-            })}
-          </svg>
-
-          {atoms.map((atom) => (
-            <button
-              key={atom.id}
-              type="button"
-              className={`atom-node${selectedAtomId === atom.id ? " atom-node--selected" : ""}`}
-              style={{ left: `${50 + atom.x * 14}%`, top: `${50 + atom.y * 20}%` }}
-              aria-label={`${atom.symbol} atom. Select to add a bonded atom.`}
-              onClick={() => setSelectedAtomId(atom.id)}
+        <div ref={stageRef} className="editor-stage" aria-label="Scrollable molecule canvas">
+          <div
+            className="editor-surface"
+            style={{ width: EDITOR_PLANE_SIZE, height: EDITOR_PLANE_SIZE }}
+          >
+            <svg
+              className="bond-layer"
+              viewBox={`0 0 ${EDITOR_PLANE_SIZE} ${EDITOR_PLANE_SIZE}`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
             >
-              {atom.symbol}
-            </button>
-          ))}
+              {bonds.map((bond) => {
+                const from = atoms.find((atom) => atom.id === bond.from);
+                const to = atoms.find((atom) => atom.id === bond.to);
+                if (!from || !to) return null;
+                const fromPosition = editorPosition(from.x, from.y);
+                const toPosition = editorPosition(to.x, to.y);
+                return <line key={`${bond.from}-${bond.to}`} x1={fromPosition.left} y1={fromPosition.top} x2={toPosition.left} y2={toPosition.top} />;
+              })}
+            </svg>
 
-          {selectedAtom && !pendingAtom && directions.map((direction) => {
-            const x = selectedAtom.x + direction.x;
-            const y = selectedAtom.y + direction.y;
-            if (isOccupied(x, y) || Math.abs(x) > 3 || Math.abs(y) > 2) return null;
-            return (
+            {atoms.map((atom) => (
               <button
-                key={direction.label}
+                key={atom.id}
                 type="button"
-                className="direction-slot"
-                style={{ left: `${50 + x * 14}%`, top: `${50 + y * 20}%` }}
-                aria-label={`Add atom ${direction.label} ${selectedAtom.symbol}`}
-                onClick={() => startAtom({ x, y, parentId: selectedAtom.id })}
+                className={`atom-node${selectedAtomId === atom.id ? " atom-node--selected" : ""}`}
+                style={editorPosition(atom.x, atom.y)}
+                aria-label={`${atom.symbol} atom. Select to add a bonded atom.`}
+                onClick={() => setSelectedAtomId(atom.id)}
+              >
+                {atom.symbol}
+              </button>
+            ))}
+
+            {selectedAtom && !pendingAtom && directions.map((direction) => {
+              const x = selectedAtom.x + direction.x;
+              const y = selectedAtom.y + direction.y;
+              if (isOccupied(x, y)) return null;
+              return (
+                <button
+                  key={direction.label}
+                  type="button"
+                  className="direction-slot"
+                  style={editorPosition(x, y)}
+                  aria-label={`Add atom ${direction.label} ${selectedAtom.symbol}`}
+                  onClick={() => startAtom({ x, y, parentId: selectedAtom.id })}
+                >
+                  <PlusIcon />
+                </button>
+              );
+            })}
+
+            {atoms.length === 0 && !pendingAtom && (
+              <button
+                type="button"
+                className="initial-atom"
+                style={editorPosition(0, 0)}
+                aria-label="Add the first atom"
+                onClick={() => startAtom({ x: 0, y: 0 })}
               >
                 <PlusIcon />
               </button>
-            );
-          })}
+            )}
 
-          {atoms.length === 0 && !pendingAtom && (
-            <button type="button" className="initial-atom" aria-label="Add the first atom" onClick={() => startAtom({ x: 0, y: 0 })}>
-              <PlusIcon />
-            </button>
-          )}
-
-          {pendingAtom && (
-            <div className="atom-entry" style={{ left: `${50 + pendingAtom.x * 14}%`, top: `${50 + pendingAtom.y * 20}%` }}>
-              <input
-                ref={symbolInputRef}
-                value={symbol}
-                maxLength={2}
-                inputMode="text"
-                autoComplete="off"
-                spellCheck={false}
-                aria-label="Element shorthand"
-                placeholder="X"
-                onChange={(event) => setSymbol(normalizeSymbol(event.target.value))}
-                aria-invalid={Boolean(validationError)}
-                aria-describedby={validationError ? "editor-validation-error" : undefined}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") void commitAtom();
-                }}
-                onBlur={() => {
-                  if (symbol) void commitAtom();
-                }}
-              />
-              <span>Enter to place</span>
-            </div>
-          )}
+            {pendingAtom && (
+              <div className="atom-entry" style={editorPosition(pendingAtom.x, pendingAtom.y)}>
+                <input
+                  ref={symbolInputRef}
+                  value={symbol}
+                  maxLength={2}
+                  inputMode="text"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Element shorthand"
+                  onChange={(event) => setSymbol(normalizeSymbol(event.target.value))}
+                  aria-invalid={Boolean(validationError)}
+                  aria-describedby={validationError ? "editor-validation-error" : undefined}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") void commitAtom();
+                  }}
+                  onBlur={() => {
+                    if (symbol) void commitAtom();
+                  }}
+                />
+                <span>Enter to place</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <footer className="editor-footer">
-          <div>
-            <p>{atoms.length === 0 ? "Start with an atom, then build in four directions." : "Select an atom to extend it, or press Backspace to remove it."}</p>
-            {validationError && <p className="editor-validation-error" id="editor-validation-error" role="alert">{validationError}</p>}
-          </div>
+          {validationError && <p className="editor-validation-error" id="editor-validation-error" role="alert">{validationError}</p>}
           <button className="done-button" type="button" disabled={atoms.length === 0 || Boolean(pendingAtom) || isValidating} onClick={() => void save()}>{isValidating ? "Checking…" : "Done"}</button>
         </footer>
       </section>
@@ -889,7 +920,6 @@ export default function App() {
       )}
       {editorState && (
         <MoleculeEditor
-          destination={editorState.side}
           initialMolecule={editorState.molecule}
           onClose={() => setEditorState(null)}
           onSave={(molecule) => saveMolecule(editorState.side, molecule)}

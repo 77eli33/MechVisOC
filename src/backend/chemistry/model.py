@@ -9,6 +9,18 @@ class Atom:
     id: str
     element: str
     formal_charge: int = 0
+    electron_count: int | None = None
+    proton_count: int | None = None
+
+    @property
+    def name(self) -> str:
+        """The atom name used by the editor model (its element symbol)."""
+        return self.element
+
+    @property
+    def charge(self) -> int:
+        """Expose formal charge using the editor model's shorter field name."""
+        return self.formal_charge
 
     def is_non_h(self) -> bool:
         if not self.element:
