@@ -347,134 +347,106 @@ button {
   animation: result-in 300ms ease-out both;
 }
 
-.buckets-panel {
+.bond-diffs-panel {
   min-height: 22rem;
   border-color: rgba(190, 243, 235, 0.28);
   animation: result-in 300ms ease-out both;
 }
 
-.bucket-sides {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
-  margin-top: 1.4rem;
-}
-
-.bucket-side {
-  min-width: 0;
-  padding: 0.9rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 0.35rem;
-  background: rgba(35, 50, 52, 0.32);
-}
-
-.bucket-side h3,
-.atom-bucket h4,
-.bucket-side p {
-  margin: 0;
-}
-
-.bucket-side h3 {
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  font-weight: 400;
-}
-
-.bucket-side > p {
-  margin-top: 1rem;
-  color: var(--ink-muted);
-}
-
-.atom-bucket {
-  margin-top: 0.9rem;
-}
-
-.atom-bucket h4 {
-  color: #b9f4ea;
-  font: 600 1rem/1 "Space Mono", monospace;
-}
-
-.atom-bucket ul {
-  display: grid;
-  gap: 0.28rem;
-  margin: 0.45rem 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.atom-bucket li {
-  overflow-wrap: anywhere;
-  color: var(--ink-muted);
-  font-size: 0.74rem;
-}
-
-.atom-bucket code {
-  color: rgba(255, 255, 255, 0.82);
-  font-family: "Space Mono", monospace;
-}
-
-.mapping-list {
+.bond-diff-list {
   display: grid;
   gap: 0.75rem;
   margin-top: 1.5rem;
 }
 
-.mapping-list > p {
+.bond-diff-list > p {
   margin: 0;
   color: var(--ink-muted);
 }
 
-.mapping-row {
+.bond-diff {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 3rem minmax(0, 1fr);
-  align-items: center;
-  gap: 0.7rem;
-}
-
-.mapping-atom {
-  display: grid;
-  gap: 0.18rem;
-  min-width: 0;
-  padding: 0.62rem 0.75rem;
-  border: 1px solid rgba(185, 244, 234, 0.34);
+  grid-template-columns: minmax(10rem, 0.7fr) minmax(14rem, 1.3fr);
+  gap: 1rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0.35rem;
-  background: rgba(41, 80, 78, 0.52);
+  background: rgba(35, 50, 52, 0.32);
 }
 
-.mapping-atom code {
+.bond-diff__atom {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.bond-diff__atom > strong {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 2.7rem;
+  height: 2.7rem;
+  border: 1px solid rgba(185, 244, 234, 0.5);
+  border-radius: 50%;
+  background: rgba(41, 80, 78, 0.66);
+  color: #b9f4ea;
+  font: 600 1.15rem/1 "Space Mono", monospace;
+}
+
+.bond-diff__atom span {
+  display: grid;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: 0.75rem;
+}
+
+.bond-diff__atom code,
+.bond-change code {
   overflow-wrap: anywhere;
   color: #e9fffb;
   font-family: "Space Mono", monospace;
   font-size: 0.72rem;
 }
 
-.mapping-atom strong {
-  color: #b9f4ea;
+.bond-diff__atom small {
+  overflow-wrap: anywhere;
+  margin-top: 0.16rem;
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.bond-diff__changes {
+  display: grid;
+  gap: 0.42rem;
+}
+
+.bond-change {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(8rem, 1fr) minmax(5rem, auto);
+  align-items: baseline;
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.42rem 0.55rem;
+  border-radius: 0.25rem;
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.8rem;
+}
+
+.bond-change b {
   font: 600 1.15rem/1 "Space Mono", monospace;
 }
 
-.mapping-atom code:first-child {
-  color: var(--ink-muted);
+.bond-change--removed b {
+  color: #ff9d91;
 }
 
-.mapping-connection {
-  position: relative;
-  display: block;
-  height: 2px;
-  background: #b9f4ea;
-  box-shadow: 0 0 6px rgba(185, 244, 234, 0.65);
+.bond-change--added b {
+  color: #83e7be;
 }
 
-.mapping-connection::after {
-  content: "";
-  position: absolute;
-  top: 50%;
-  right: -1px;
-  width: 0.48rem;
-  height: 0.48rem;
-  border-top: 2px solid #b9f4ea;
-  border-right: 2px solid #b9f4ea;
-  transform: translateY(-50%) rotate(45deg);
+.bond-change strong {
+  color: #e9fffb;
+  font-family: "Space Mono", monospace;
 }
 
 @keyframes result-in {
@@ -1125,6 +1097,18 @@ button {
   .molecule-row {
     gap: 2.2rem;
     padding-inline: 0.4rem;
+  }
+
+  .bond-diff {
+    grid-template-columns: 1fr;
+  }
+
+  .bond-change {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+  }
+
+  .bond-change code {
+    grid-column: 2;
   }
 
   .editor-dialog {

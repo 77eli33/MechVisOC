@@ -1,5 +1,19 @@
-from src.backend.chemistry.mapping import map_atoms, sort_atoms_into_buckets, validate_reaction
-from src.backend.chemistry.model import Atom, AtomRef, Bond, Molecule, Products, Reactants
+from src.backend.chemistry.mapping import (
+    get_bond_diffs,
+    map_atoms,
+    sort_atoms_into_buckets,
+    validate_reaction,
+)
+from src.backend.chemistry.model import (
+    Atom,
+    AtomBond,
+    AtomRef,
+    Bond,
+    BondDiff,
+    Molecule,
+    Products,
+    Reactants,
+)
 
 
 def molecule(molecule_id: str, *elements: str) -> Molecule:
@@ -79,3 +93,86 @@ def test_map_atoms_uses_bond_environment_for_reordered_atoms() -> None:
         AtomRef("reactant", "middle-c"): AtomRef("product", "product-middle"),
         AtomRef("reactant", "oxygen"): AtomRef("product", "product-o"),
     }
+
+
+def test_get_bond_diffs_reports_changed_bond_order_for_both_atoms() -> None:
+    reactant = Molecule(
+        molecule_id="reactant",
+        name="carbon monoxide",
+        atoms=[Atom("carbon", "C"), Atom("oxygen", "O")],
+        bonds=[Bond("carbon", "oxygen", 1)],
+    )
+    product = Molecule(
+        molecule_id="product",
+        name="carbon monoxide",
+        atoms=[Atom("product-carbon", "C"), Atom("product-oxygen", "O")],
+        bonds=[Bond("product-carbon", "product-oxygen", 2)],
+    )
+    mapping = {
+        AtomRef("reactant", "carbon"): AtomRef("product", "product-carbon"),
+        AtomRef("reactant", "oxygen"): AtomRef("product", "product-oxygen"),
+    }
+
+    diffs = get_bond_diffs(Reactants([reactant]), Products([product]), mapping)
+
+    assert diffs == [
+        BondDiff(
+            reactant=AtomRef("reactant", "carbon"),
+            product=AtomRef("product", "product-carbon"),
+            removed_bonds=(AtomBond(AtomRef("reactant", "oxygen"), 1),),
+            added_bonds=(AtomBond(AtomRef("reactant", "oxygen"), 2),),
+        ),
+        BondDiff(
+            reactant=AtomRef("reactant", "oxygen"),
+            product=AtomRef("product", "product-oxygen"),
+            removed_bonds=(AtomBond(AtomRef("reactant", "carbon"), 1),),
+            added_bonds=(AtomBond(AtomRef("reactant", "carbon"), 2),),
+        ),
+    ]
+
+
+def test_get_bond_diffs_reports_changed_bond_partners() -> None:
+    reactant = Molecule(
+        molecule_id="reactant",
+        name="before",
+        atoms=[Atom("carbon", "C"), Atom("oxygen", "O"), Atom("nitrogen", "N")],
+        bonds=[Bond("carbon", "oxygen")],
+    )
+    product = Molecule(
+        molecule_id="product",
+        name="after",
+        atoms=[Atom("product-carbon", "C"), Atom("product-oxygen", "O"), Atom("product-nitrogen", "N")],
+        bonds=[Bond("product-carbon", "product-nitrogen")],
+    )
+    mapping = {
+        AtomRef("reactant", "carbon"): AtomRef("product", "product-carbon"),
+        AtomRef("reactant", "oxygen"): AtomRef("product", "product-oxygen"),
+        AtomRef("reactant", "nitrogen"): AtomRef("product", "product-nitrogen"),
+    }
+
+    diffs = get_bond_diffs(Reactants([reactant]), Products([product]), mapping)
+
+    assert [diff.reactant.atom_id for diff in diffs] == ["carbon", "oxygen", "nitrogen"]
+    assert diffs[0].removed_bonds == (AtomBond(AtomRef("reactant", "oxygen"), 1),)
+    assert diffs[0].added_bonds == (AtomBond(AtomRef("reactant", "nitrogen"), 1),)
+    assert diffs[1].removed_bonds == (AtomBond(AtomRef("reactant", "carbon"), 1),)
+    assert diffs[1].added_bonds == ()
+    assert diffs[2].removed_bonds == ()
+    assert diffs[2].added_bonds == (AtomBond(AtomRef("reactant", "carbon"), 1),)
+
+
+def test_get_bond_diffs_ignores_unchanged_bonds_after_mapping() -> None:
+    reactant = Molecule(
+        molecule_id="reactant",
+        name="before",
+        atoms=[Atom("carbon", "C"), Atom("oxygen", "O")],
+        bonds=[Bond("carbon", "oxygen", 2)],
+    )
+    product = Molecule(
+        molecule_id="product",
+        name="after",
+        atoms=[Atom("oxygen-copy", "O"), Atom("carbon-copy", "C")],
+        bonds=[Bond("oxygen-copy", "carbon-copy", 2)],
+    )
+
+    assert get_bond_diffs(Reactants([reactant]), Products([product])) == []

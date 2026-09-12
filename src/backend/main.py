@@ -16,7 +16,13 @@ from .api import (
     to_domain_products,
     to_domain_reactants,
 )
-from .chemistry.mapping import find_backbone, map_atoms, sort_atoms_into_buckets, validate_reaction
+from .chemistry.mapping import (
+    find_backbone,
+    get_bond_diffs,
+    map_atoms,
+    sort_atoms_into_buckets,
+    validate_reaction,
+)
 from .chemistry.model import Atom
 from .chemistry.validation import validate_atom_names, validate_electron_configuration
 
@@ -86,6 +92,7 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
         )
     try:
         mappings = map_atoms(reactants, products)
+        bond_diffs = get_bond_diffs(reactants, products, mappings)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
     return AtomMappingResponse(
@@ -102,4 +109,5 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
             }
             for reactant, product in mappings.items()
         ],
+        bond_diffs=bond_diffs,
     )

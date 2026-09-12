@@ -234,6 +234,55 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
             "product": {"molecule_id": "product-1", "atom_id": "br-2"},
         }
     ]
+    assert body["bond_diffs"] == []
+
+
+def test_atom_mapping_returns_bond_diffs() -> None:
+    def molecule(side: str, order: int) -> dict:
+        return {
+            "id": side,
+            "atoms": [
+                {"id": f"{side}-c", "element": "C", "x": 0, "y": 0},
+                {"id": f"{side}-o", "element": "O", "x": 1, "y": 0},
+            ],
+            "bonds": [{"atom1_id": f"{side}-c", "atom2_id": f"{side}-o", "order": order}],
+        }
+
+    response = client.post(
+        "/api/atom-mapping",
+        json={
+            "reactants": {"molecules": [molecule("reactant", 1)]},
+            "products": {"molecules": [molecule("product", 2)]},
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["bond_diffs"] == [
+        {
+            "reactant": {"molecule_id": "reactant", "atom_id": "reactant-c"},
+            "product": {"molecule_id": "product", "atom_id": "product-c"},
+            "removed_bonds": [{
+                "partner": {"molecule_id": "reactant", "atom_id": "reactant-o"},
+                "order": 1,
+            }],
+            "added_bonds": [{
+                "partner": {"molecule_id": "reactant", "atom_id": "reactant-o"},
+                "order": 2,
+            }],
+        },
+        {
+            "reactant": {"molecule_id": "reactant", "atom_id": "reactant-o"},
+            "product": {"molecule_id": "product", "atom_id": "product-o"},
+            "removed_bonds": [{
+                "partner": {"molecule_id": "reactant", "atom_id": "reactant-c"},
+                "order": 1,
+            }],
+            "added_bonds": [{
+                "partner": {"molecule_id": "reactant", "atom_id": "reactant-c"},
+                "order": 2,
+            }],
+        },
+    ]
 
 
 def test_atom_mapping_rejects_reaction_with_different_atoms() -> None:

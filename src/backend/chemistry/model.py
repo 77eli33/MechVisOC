@@ -82,3 +82,21 @@ class BucketAtom:
 class AtomRef:
     molecule_id: str
     atom_id: str
+
+
+@dataclass(frozen=True)
+class AtomBond:
+    """A bond from one mapped atom to another reactant-side atom."""
+
+    partner: AtomRef
+    order: int
+
+
+@dataclass(frozen=True)
+class BondDiff:
+    """Changed incident bonds for one mapped reactant atom."""
+
+    reactant: AtomRef
+    product: AtomRef
+    removed_bonds: tuple[AtomBond, ...]
+    added_bonds: tuple[AtomBond, ...]

@@ -14,13 +14,14 @@ type Molecule = {
   charge: number;
 };
 type BucketAtom = { molecule_id: string; atom_id: string };
-type AtomBucket = { element_name: string; atoms: BucketAtom[] };
-type AtomMapping = { reactant: BucketAtom; product: BucketAtom };
-type AtomMappingResult = {
-  reactant_buckets: AtomBucket[];
-  product_buckets: AtomBucket[];
-  atom_mappings: AtomMapping[];
+type AtomBond = { partner: BucketAtom; order: BondOrder };
+type BondDiff = {
+  reactant: BucketAtom;
+  product: BucketAtom;
+  removed_bonds: AtomBond[];
+  added_bonds: AtomBond[];
 };
+type ReactionAnalysisResult = { bond_diffs: BondDiff[] };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string; atomId?: string };
 type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
@@ -190,7 +191,7 @@ function validateCompletedMolecule(molecule: Molecule): Promise<ValidationResult
   return requestValidation("/api/validate-molecule", { molecule: toApiMolecule(molecule) });
 }
 
-async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): Promise<AtomMappingResult> {
+async function requestReactionAnalysis(molecules: Record<Side, Molecule[]>): Promise<ReactionAnalysisResult> {
   const reactants: ApiMoleculeCollection = { molecules: molecules.reactants.map(toApiMolecule) };
   const products: ApiMoleculeCollection = { molecules: molecules.products.map(toApiMolecule) };
   const response = await fetch("/api/atom-mapping", {
@@ -202,7 +203,7 @@ async function sendReactionForAtomMapping(molecules: Record<Side, Molecule[]>): 
     const body = await response.json().catch(() => null) as { detail?: string } | null;
     throw new Error(body?.detail ?? "The reaction could not be transferred for atom mapping.");
   }
-  return await response.json() as AtomMappingResult;
+  return await response.json() as ReactionAnalysisResult;
 }
 
 function Formula({ parts }: { parts: FormulaPart[] }) {
@@ -460,34 +461,47 @@ function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
   );
 }
 
-function AtomMappingsPanel({ mappings, molecules }: { mappings: AtomMapping[]; molecules: Record<Side, Molecule[]> }) {
+function BondDiffsPanel({ diffs, molecules }: { diffs: BondDiff[]; molecules: Record<Side, Molecule[]> }) {
   const atomSymbols = new Map(
     [...molecules.reactants, ...molecules.products].flatMap((molecule) =>
       molecule.atoms.map((atom) => [`${molecule.id}:${atom.id}`, atom.symbol] as const),
     ),
   );
   const atomSymbol = (atom: BucketAtom) => atomSymbols.get(`${atom.molecule_id}:${atom.atom_id}`) ?? "?";
+  const bondOrderLabel = (order: BondOrder) => order === 1 ? "Single" : order === 2 ? "Double" : "Triple";
   return (
-    <section className="molecule-panel buckets-panel" aria-labelledby="mappings-title">
+    <section className="molecule-panel bond-diffs-panel" aria-labelledby="bond-diffs-title">
       <header className="panel-heading">
-        <h2 id="mappings-title">Atom mappings</h2>
-        <span>{mappings.length} {mappings.length === 1 ? "atom" : "atoms"} mapped</span>
+        <h2 id="bond-diffs-title">Bond changes</h2>
+        <span>{diffs.length} reactant {diffs.length === 1 ? "atom" : "atoms"} changed</span>
       </header>
-      <div className="mapping-list">
-        {mappings.length === 0 ? <p>No atoms can be mapped unambiguously yet.</p> : mappings.map((mapping) => (
-          <div className="mapping-row" key={`${mapping.reactant.molecule_id}:${mapping.reactant.atom_id}`}>
-            <span className="mapping-atom">
-              <strong>{atomSymbol(mapping.reactant)}</strong>
-              <code>{mapping.reactant.molecule_id}</code>
-              <code>{mapping.reactant.atom_id}</code>
-            </span>
-            <i className="mapping-connection" aria-label="maps to" />
-            <span className="mapping-atom">
-              <strong>{atomSymbol(mapping.product)}</strong>
-              <code>{mapping.product.molecule_id}</code>
-              <code>{mapping.product.atom_id}</code>
-            </span>
-          </div>
+      <div className="bond-diff-list">
+        {diffs.length === 0 ? <p>No bond changes found.</p> : diffs.map((diff) => (
+          <article className="bond-diff" key={`${diff.reactant.molecule_id}:${diff.reactant.atom_id}`}>
+            <header className="bond-diff__atom">
+              <strong>{atomSymbol(diff.reactant)}</strong>
+              <span>
+                Reactant atom <code>{diff.reactant.atom_id}</code>
+                <small>{diff.reactant.molecule_id}</small>
+              </span>
+            </header>
+            <div className="bond-diff__changes">
+              {diff.removed_bonds.map((bond) => (
+                <p className="bond-change bond-change--removed" key={`removed:${bond.partner.molecule_id}:${bond.partner.atom_id}:${bond.order}`}>
+                  <b aria-label="removed bond">−</b>
+                  <span>{bondOrderLabel(bond.order)} bond to <strong>{atomSymbol(bond.partner)}</strong></span>
+                  <code>{bond.partner.molecule_id} / {bond.partner.atom_id}</code>
+                </p>
+              ))}
+              {diff.added_bonds.map((bond) => (
+                <p className="bond-change bond-change--added" key={`added:${bond.partner.molecule_id}:${bond.partner.atom_id}:${bond.order}`}>
+                  <b aria-label="added bond">+</b>
+                  <span>{bondOrderLabel(bond.order)} bond to <strong>{atomSymbol(bond.partner)}</strong></span>
+                  <code>{bond.partner.molecule_id} / {bond.partner.atom_id}</code>
+                </p>
+              ))}
+            </div>
+          </article>
         ))}
       </div>
     </section>
@@ -837,7 +851,7 @@ function MoleculeEditor({
 export default function App() {
   const [molecules, setMolecules] = useState<Record<Side, Molecule[]>>(emptyMolecules);
   const [selectedMoleculeId, setSelectedMoleculeId] = useState<string | null>(null);
-  const [buckets, setBuckets] = useState<AtomMappingResult | null>(null);
+  const [analysis, setAnalysis] = useState<ReactionAnalysisResult | null>(null);
   const [editorState, setEditorState] = useState<EditorState | null>(null);
   const [moleculeMenu, setMoleculeMenu] = useState<MoleculeMenuState | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -861,7 +875,7 @@ export default function App() {
       };
     });
     setSelectedMoleculeId(molecule.id);
-    setBuckets(null);
+    setAnalysis(null);
     setRunError(null);
     setEditorState(null);
   }, []);
@@ -879,7 +893,7 @@ export default function App() {
         molecule.id === moleculeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
       ),
     }));
-    setBuckets(null);
+    setAnalysis(null);
   };
 
   const removeMolecule = (side: Side, moleculeId: string) => {
@@ -888,7 +902,7 @@ export default function App() {
       [side]: current[side].filter((molecule) => molecule.id !== moleculeId),
     }));
     if (selectedMoleculeId === moleculeId) setSelectedMoleculeId(null);
-    setBuckets(null);
+    setAnalysis(null);
     setMoleculeMenu(null);
     setRunError(null);
   };
@@ -902,9 +916,9 @@ export default function App() {
     setIsRunning(true);
     setRunError(null);
     try {
-      setBuckets(await sendReactionForAtomMapping(molecules));
+      setAnalysis(await requestReactionAnalysis(molecules));
     } catch (error) {
-      setRunError(error instanceof Error ? error.message : "The atom buckets could not be generated.");
+      setRunError(error instanceof Error ? error.message : "The reaction could not be analyzed.");
     } finally {
       setIsRunning(false);
     }
@@ -940,7 +954,7 @@ export default function App() {
         const molecule = moleculeFromSymbols(elements, charge);
         setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
         setSelectedMoleculeId(molecule.id);
-        setBuckets(null);
+        setAnalysis(null);
         return { id: molecule.id, side, formula: formatFormulaLabel(molecule.formula), charge };
       },
     }, { signal: lifecycle.signal })).catch(() => undefined);
@@ -970,7 +984,7 @@ export default function App() {
           onAdd={() => setEditorState({ side: "reactants" })}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
-        {buckets && <AtomMappingsPanel mappings={buckets.atom_mappings} molecules={molecules} />}
+        {analysis && <BondDiffsPanel diffs={analysis.bond_diffs} molecules={molecules} />}
         <MoleculePanel
           side="products"
           title="Products"
