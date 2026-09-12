@@ -94,8 +94,19 @@ class MappedBond:
 
 
 @dataclass(frozen=True)
+class BondOrderChange:
+    """A changed order for a canonical pair of bonded atoms."""
+
+    atom1: AtomRef
+    atom2: AtomRef
+    old_order: int
+    new_order: int
+
+
+@dataclass(frozen=True)
 class BondDiff:
     """Reaction-level bond removals and additions."""
 
     removed_bonds: tuple[MappedBond, ...]
     added_bonds: tuple[MappedBond, ...]
+    order_changed: tuple[BondOrderChange, ...]

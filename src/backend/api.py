@@ -115,11 +115,21 @@ class MappedBondPayload(BaseModel):
     order: int
 
 
+class BondOrderChangePayload(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    atom1: BucketAtomPayload
+    atom2: BucketAtomPayload
+    old_order: int
+    new_order: int
+
+
 class BondDiffPayload(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     removed_bonds: List[MappedBondPayload]
     added_bonds: List[MappedBondPayload]
+    order_changed: List[BondOrderChangePayload]
 
 
 class AtomMappingResponse(BaseModel):

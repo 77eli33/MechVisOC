@@ -9,6 +9,7 @@ from src.backend.chemistry.model import (
     AtomRef,
     Bond,
     BondDiff,
+    BondOrderChange,
     MappedBond,
     Molecule,
     Products,
@@ -134,17 +135,13 @@ def test_get_bond_diffs_reports_changed_bond_order_once() -> None:
     diffs = get_bond_diffs(Reactants([reactant]), Products([product]), mapping)
 
     assert diffs == BondDiff(
-        removed_bonds=(
-            MappedBond(
+        removed_bonds=(),
+        added_bonds=(),
+        order_changed=(
+            BondOrderChange(
                 AtomRef("reactant", "carbon"),
                 AtomRef("reactant", "oxygen"),
                 1,
-            ),
-        ),
-        added_bonds=(
-            MappedBond(
-                AtomRef("reactant", "carbon"),
-                AtomRef("reactant", "oxygen"),
                 2,
             ),
         ),
@@ -187,6 +184,7 @@ def test_get_bond_diffs_reports_changed_bond_partners() -> None:
                 1,
             ),
         ),
+        order_changed=(),
     )
 
 
@@ -204,4 +202,4 @@ def test_get_bond_diffs_normalizes_endpoint_order_before_comparison() -> None:
         bonds=[Bond("oxygen-copy", "carbon-copy", 2)],
     )
 
-    assert get_bond_diffs(Reactants([reactant]), Products([product])) == BondDiff((), ())
+    assert get_bond_diffs(Reactants([reactant]), Products([product])) == BondDiff((), (), ())

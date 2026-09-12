@@ -5,7 +5,16 @@ from collections import Counter
 from rdkit import Chem
 from rdkit.Chem import rdFMCS
 
-from .model import AtomRef, BondDiff, Bucket, BucketAtom, MappedBond, Products, Reactants
+from .model import (
+    AtomRef,
+    BondDiff,
+    BondOrderChange,
+    Bucket,
+    BucketAtom,
+    MappedBond,
+    Products,
+    Reactants,
+)
 from .rdkit_service import (
     RDKitReactionSide,
     from_rdkit_atom_mapping,
@@ -88,7 +97,8 @@ def get_bond_diffs(
     Product bond endpoints are translated back to reactant atom references
     before comparison. Each undirected bond is stored with its endpoints in
     sorted order, so endpoint order in the input cannot create a false diff.
-    A bond-order change appears as one removed bond and one added bond.
+    Bonds with matching endpoints but different orders are reported separately
+    from bonds that were structurally removed or added.
     """
     mapping = atom_mapping if atom_mapping is not None else map_atoms(reactants, products)
     inverse_mapping = {product: reactant for reactant, product in mapping.items()}
@@ -120,10 +130,30 @@ def get_bond_diffs(
                 ) from error
             product_bonds.add(_canonical_bond(atom1, atom2, bond.order))
 
-    return BondDiff(
-        removed_bonds=tuple(sorted(reactant_bonds - product_bonds, key=_mapped_bond_sort_key)),
-        added_bonds=tuple(sorted(product_bonds - reactant_bonds, key=_mapped_bond_sort_key)),
+    reactant_by_endpoints = _bonds_by_endpoints(reactant_bonds)
+    product_by_endpoints = _bonds_by_endpoints(product_bonds)
+    reactant_endpoints = set(reactant_by_endpoints)
+    product_endpoints = set(product_by_endpoints)
+
+    removed_bonds = tuple(
+        reactant_by_endpoints[endpoints]
+        for endpoints in sorted(reactant_endpoints - product_endpoints, key=_endpoints_sort_key)
     )
+    added_bonds = tuple(
+        product_by_endpoints[endpoints]
+        for endpoints in sorted(product_endpoints - reactant_endpoints, key=_endpoints_sort_key)
+    )
+    order_changed = tuple(
+        BondOrderChange(
+            atom1=endpoints[0],
+            atom2=endpoints[1],
+            old_order=reactant_by_endpoints[endpoints].order,
+            new_order=product_by_endpoints[endpoints].order,
+        )
+        for endpoints in sorted(reactant_endpoints & product_endpoints, key=_endpoints_sort_key)
+        if reactant_by_endpoints[endpoints].order != product_by_endpoints[endpoints].order
+    )
+    return BondDiff(removed_bonds, added_bonds, order_changed)
 
 
 def _canonical_bond(atom1: AtomRef, atom2: AtomRef, order: int) -> MappedBond:
@@ -136,14 +166,21 @@ def _atom_ref_sort_key(atom: AtomRef) -> tuple[str, str]:
     return atom.atom_id, atom.molecule_id
 
 
-def _mapped_bond_sort_key(bond: MappedBond) -> tuple[str, str, str, str, int]:
-    return (
-        bond.atom1.atom_id,
-        bond.atom1.molecule_id,
-        bond.atom2.atom_id,
-        bond.atom2.molecule_id,
-        bond.order,
-    )
+def _bonds_by_endpoints(
+    bonds: set[MappedBond],
+) -> dict[tuple[AtomRef, AtomRef], MappedBond]:
+    bonds_by_endpoints: dict[tuple[AtomRef, AtomRef], MappedBond] = {}
+    for bond in bonds:
+        endpoints = (bond.atom1, bond.atom2)
+        existing = bonds_by_endpoints.get(endpoints)
+        if existing is not None and existing.order != bond.order:
+            raise ValueError("Multiple bond orders were supplied for the same atom pair")
+        bonds_by_endpoints[endpoints] = bond
+    return bonds_by_endpoints
+
+
+def _endpoints_sort_key(endpoints: tuple[AtomRef, AtomRef]) -> tuple[str, str, str, str]:
+    return (*_atom_ref_sort_key(endpoints[0]), *_atom_ref_sort_key(endpoints[1]))
 
 
 def _map_rdkit_atoms(

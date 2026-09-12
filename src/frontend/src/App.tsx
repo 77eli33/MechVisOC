@@ -15,9 +15,16 @@ type Molecule = {
 };
 type BucketAtom = { molecule_id: string; atom_id: string };
 type MappedBond = { atom1: BucketAtom; atom2: BucketAtom; order: BondOrder };
+type BondOrderChange = {
+  atom1: BucketAtom;
+  atom2: BucketAtom;
+  old_order: BondOrder;
+  new_order: BondOrder;
+};
 type BondDiff = {
   removed_bonds: MappedBond[];
   added_bonds: MappedBond[];
+  order_changed: BondOrderChange[];
 };
 type ReactionAnalysisResult = { bond_diffs: BondDiff };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
@@ -468,7 +475,7 @@ function BondDiffsPanel({ diff, molecules }: { diff: BondDiff; molecules: Record
   const atomSymbol = (atom: BucketAtom) => atomSymbols.get(`${atom.molecule_id}:${atom.atom_id}`) ?? "?";
   const bondOrderLabel = (order: BondOrder) => order === 1 ? "Single" : order === 2 ? "Double" : "Triple";
   const bondGlyph = (order: BondOrder) => order === 1 ? "—" : order === 2 ? "═" : "≡";
-  const changeCount = diff.removed_bonds.length + diff.added_bonds.length;
+  const changeCount = diff.removed_bonds.length + diff.added_bonds.length + diff.order_changed.length;
   const renderBonds = (bonds: MappedBond[], change: "removed" | "added") => (
     bonds.length === 0 ? <p>None</p> : bonds.map((bond) => (
       <article
@@ -481,6 +488,27 @@ function BondDiffsPanel({ diff, molecules }: { diff: BondDiff; molecules: Record
           <strong>{atomSymbol(bond.atom2)}</strong>
         </div>
         <span>{bondOrderLabel(bond.order)} bond</span>
+        <div className="bond-change-card__refs">
+          <code>{bond.atom1.molecule_id} / {bond.atom1.atom_id}</code>
+          <code>{bond.atom2.molecule_id} / {bond.atom2.atom_id}</code>
+        </div>
+      </article>
+    ))
+  );
+  const renderOrderChanges = () => (
+    diff.order_changed.length === 0 ? <p>None</p> : diff.order_changed.map((bond) => (
+      <article
+        className="bond-change-card bond-change-card--order"
+        key={`${bond.atom1.molecule_id}:${bond.atom1.atom_id}:${bond.atom2.molecule_id}:${bond.atom2.atom_id}`}
+      >
+        <div className="bond-change-card__bond">
+          <strong>{atomSymbol(bond.atom1)}</strong>
+          <i aria-label={`${bondOrderLabel(bond.old_order)} bond changed to ${bondOrderLabel(bond.new_order)} bond`}>
+            {bondGlyph(bond.old_order)} → {bondGlyph(bond.new_order)}
+          </i>
+          <strong>{atomSymbol(bond.atom2)}</strong>
+        </div>
+        <span>{bondOrderLabel(bond.old_order)} → {bondOrderLabel(bond.new_order)} bond</span>
         <div className="bond-change-card__refs">
           <code>{bond.atom1.molecule_id} / {bond.atom1.atom_id}</code>
           <code>{bond.atom2.molecule_id} / {bond.atom2.atom_id}</code>
@@ -505,6 +533,10 @@ function BondDiffsPanel({ diff, molecules }: { diff: BondDiff; molecules: Record
           <section className="bond-diff-group bond-diff-group--added">
             <h3>Added</h3>
             {renderBonds(diff.added_bonds, "added")}
+          </section>
+          <section className="bond-diff-group bond-diff-group--order">
+            <h3>Order changed</h3>
+            {renderOrderChanges()}
           </section>
         </div>
       )}

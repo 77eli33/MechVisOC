@@ -234,7 +234,11 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
             "product": {"molecule_id": "product-1", "atom_id": "br-2"},
         }
     ]
-    assert body["bond_diffs"] == {"removed_bonds": [], "added_bonds": []}
+    assert body["bond_diffs"] == {
+        "removed_bonds": [],
+        "added_bonds": [],
+        "order_changed": [],
+    }
 
 
 def test_atom_mapping_returns_bond_diffs() -> None:
@@ -258,15 +262,13 @@ def test_atom_mapping_returns_bond_diffs() -> None:
 
     assert response.status_code == 200
     assert response.json()["bond_diffs"] == {
-        "removed_bonds": [{
+        "removed_bonds": [],
+        "added_bonds": [],
+        "order_changed": [{
             "atom1": {"molecule_id": "reactant", "atom_id": "reactant-c"},
             "atom2": {"molecule_id": "reactant", "atom_id": "reactant-o"},
-            "order": 1,
-        }],
-        "added_bonds": [{
-            "atom1": {"molecule_id": "reactant", "atom_id": "reactant-c"},
-            "atom2": {"molecule_id": "reactant", "atom_id": "reactant-o"},
-            "order": 2,
+            "old_order": 1,
+            "new_order": 2,
         }],
     }
 
