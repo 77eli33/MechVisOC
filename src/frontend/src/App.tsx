@@ -593,13 +593,26 @@ function MoleculeEditor({
     if (key.startsWith("atom:")) setSelectedAtomId(key.slice(5));
   };
 
+  const startAtom = (candidate: PendingAtom, initialSymbol = "") => {
+    setPendingAtom(candidate);
+    setSymbol(initialSymbol);
+    setValidationError(null);
+  };
+
+  const startSlotEntry = (slot: (typeof visibleSlots)[number]) => {
+    setHoveredAtomId(null);
+    setSelectedAtomId(slot.parentId);
+    setFocusedTargetKey(slot.key);
+    startAtom({ x: slot.x, y: slot.y, parentId: slot.parentId });
+  };
+
   const cancelPendingAtom = () => {
     if (!pendingAtom) return;
     const returnAtomId = pendingAtom.parentId ?? pendingAtom.atomId;
     setPendingAtom(null);
     setSymbol("");
     setValidationError(null);
-    setFocusedTargetKey(returnAtomId ? `atom:${returnAtomId}` : "initial");
+    setFocusedTargetKey(returnAtomId ? `atom:${returnAtomId}` : "none");
   };
 
   const beginClose = useCallback((afterClose?: () => void) => {
@@ -671,16 +684,18 @@ function MoleculeEditor({
           ?? targets[0];
         if (!current) return;
         const next = nextNavigationTarget(current, targets, direction);
-        if (next) focusTarget(next.key);
+        if (next?.kind === "slot") {
+          const slot = visibleSlots.find((candidate) => candidate.key === next.key);
+          if (slot) startSlotEntry(slot);
+        } else if (next) {
+          focusTarget(next.key);
+        }
         return;
       }
 
       if (event.key === "Enter" && focusedSlot && isCanvasTarget) {
         event.preventDefault();
-        setSelectedAtomId(focusedSlot.parentId);
-        setPendingAtom({ x: focusedSlot.x, y: focusedSlot.y, parentId: focusedSlot.parentId });
-        setSymbol("");
-        setValidationError(null);
+        startSlotEntry(focusedSlot);
         return;
       }
 
@@ -744,11 +759,6 @@ function MoleculeEditor({
     };
   }, [atoms, pendingAtom, symbol]);
 
-  const startAtom = (candidate: PendingAtom, initialSymbol = "") => {
-    setPendingAtom(candidate);
-    setSymbol(initialSymbol);
-    setValidationError(null);
-  };
   const commitAtom = async () => {
     if (!pendingAtom || !symbol || isValidating) return;
     const atom: Atom = {
@@ -958,11 +968,8 @@ function MoleculeEditor({
                 className={`direction-slot${focusedTargetKey === slot.key ? " direction-slot--focused" : ""}`}
                 style={editorPosition(slot.x, slot.y)}
                 aria-label={`Add atom ${slot.direction.label} ${slotParent.symbol}`}
-                onClick={() => {
-                  setSelectedAtomId(slot.parentId);
-                  startAtom({ x: slot.x, y: slot.y, parentId: slot.parentId });
-                }}
-                onFocus={() => focusTarget(slot.key)}
+                onClick={() => startSlotEntry(slot)}
+                onFocus={() => startSlotEntry(slot)}
                 onPointerEnter={() => {
                   if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
                   setHoveredAtomId(slot.parentId);
@@ -983,9 +990,13 @@ function MoleculeEditor({
                 aria-label="Add the first atom"
                 onClick={() => startAtom({ x: 0, y: 0 })}
                 onFocus={() => setFocusedTargetKey("initial")}
-              >
-                <PlusIcon />
-              </button>
+                onKeyDown={(event) => {
+                  if (/^[a-z]$/i.test(event.key)) {
+                    event.preventDefault();
+                    startAtom({ x: 0, y: 0 }, normalizeSymbol(event.key));
+                  }
+                }}
+              />
             )}
 
             {pendingAtom && (
