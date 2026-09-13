@@ -2,6 +2,13 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import ShaderBackground from "./ShaderBackground";
 import ElectronFlow from "./ElectronFlow";
 import type { ElectronFlow as ElectronFlowData } from "./electronFlowLayout";
+import {
+  EDITOR_DIRECTIONS,
+  formatFormalCharge,
+  freeSlots,
+  nextNavigationTarget,
+  type NavigationTarget,
+} from "./moleculeEditorGeometry";
 
 type Side = "reactants" | "products";
 type Atom = { id: string; symbol: string; x: number; y: number; formalCharge: number };
@@ -56,22 +63,15 @@ type ModelContext = {
   ) => void | Promise<void>;
 };
 
-const directions = [
-  { x: 0, y: -1, label: "above" },
-  { x: 1, y: 0, label: "to the right" },
-  { x: 0, y: 1, label: "below" },
-  { x: -1, y: 0, label: "to the left" },
-];
-
 // Keep the working plane large enough to feel unbounded while retaining native,
-// accessible scrolling. Atom positions land on every fourth background dot.
+// accessible scrolling. The atom spacing mirrors the electron-flow scene.
 const EDITOR_PLANE_SIZE = 6720;
 const EDITOR_PLANE_CENTER = EDITOR_PLANE_SIZE / 2;
-const EDITOR_ATOM_STEP = 112;
+const EDITOR_ATOM_STEP = 80;
 const BOND_LINE_OFFSETS: Record<BondOrder, number[]> = {
   1: [0],
-  2: [-4, 4],
-  3: [-7, 0, 7],
+  2: [-3, 3],
+  3: [-6, 0, 6],
 };
 
 const emptyMolecules: Record<Side, Molecule[]> = { reactants: [], products: [] };
@@ -553,6 +553,10 @@ function MoleculeEditor({
   const [atoms, setAtoms] = useState<Atom[]>(() => initialMolecule?.atoms.map((atom) => ({ ...atom })) ?? []);
   const [bonds, setBonds] = useState<Bond[]>(() => initialMolecule?.bonds.map((bond) => ({ ...bond })) ?? []);
   const [selectedAtomId, setSelectedAtomId] = useState<string | null>(initialMolecule?.atoms[0]?.id ?? null);
+  const [hoveredAtomId, setHoveredAtomId] = useState<string | null>(null);
+  const [focusedTargetKey, setFocusedTargetKey] = useState(
+    initialMolecule?.atoms[0] ? `atom:${initialMolecule.atoms[0].id}` : "initial",
+  );
   const [pendingAtom, setPendingAtom] = useState<PendingAtom | null>(null);
   const [symbol, setSymbol] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -560,13 +564,43 @@ function MoleculeEditor({
   const [isClosing, setIsClosing] = useState(false);
   const symbolInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const targetRefs = useRef(new Map<string, HTMLButtonElement>());
+  const hoverTimerRef = useRef<number | null>(null);
   const closeTimerRef = useRef<number | null>(null);
   const selectedAtom = atoms.find((atom) => atom.id === selectedAtomId);
+
+  const focusedAtomId = focusedTargetKey.startsWith("atom:") ? focusedTargetKey.slice(5) : null;
+  const focusedSlot = focusedTargetKey.startsWith("slot:")
+    ? atoms.flatMap((atom) => freeSlots(atom, atoms)).find((slot) => slot.key === focusedTargetKey)
+    : undefined;
+  const slotParentId = hoveredAtomId ?? focusedAtomId ?? focusedSlot?.parentId ?? selectedAtomId;
+  const slotParent = atoms.find((atom) => atom.id === slotParentId);
+  const visibleSlots = !pendingAtom && slotParent ? freeSlots(slotParent, atoms) : [];
 
   const editorPosition = (x: number, y: number) => ({
     left: EDITOR_PLANE_CENTER + x * EDITOR_ATOM_STEP,
     top: EDITOR_PLANE_CENTER + y * EDITOR_ATOM_STEP,
   });
+
+  const registerTarget = (key: string) => (node: HTMLButtonElement | null) => {
+    if (node) targetRefs.current.set(key, node);
+    else targetRefs.current.delete(key);
+  };
+
+  const focusTarget = (key: string) => {
+    setHoveredAtomId(null);
+    setFocusedTargetKey(key);
+    if (key.startsWith("atom:")) setSelectedAtomId(key.slice(5));
+  };
+
+  const cancelPendingAtom = () => {
+    if (!pendingAtom) return;
+    const returnAtomId = pendingAtom.parentId ?? pendingAtom.atomId;
+    setPendingAtom(null);
+    setSymbol("");
+    setValidationError(null);
+    setFocusedTargetKey(returnAtomId ? `atom:${returnAtomId}` : "initial");
+  };
 
   const beginClose = useCallback((afterClose?: () => void) => {
     if (isClosing) return;
@@ -579,6 +613,7 @@ function MoleculeEditor({
 
   useEffect(() => () => {
     if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+    if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
   }, []);
 
   useEffect(() => {
@@ -592,33 +627,91 @@ function MoleculeEditor({
   }, []);
 
   useEffect(() => {
-    symbolInputRef.current?.focus();
+    if (pendingAtom) symbolInputRef.current?.focus();
   }, [pendingAtom]);
 
   useEffect(() => {
+    if (pendingAtom) return;
+    targetRefs.current.get(focusedTargetKey)?.focus({ preventScroll: true });
+  }, [focusedTargetKey, pendingAtom, visibleSlots.length]);
+
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (
+        event.target instanceof HTMLInputElement
+        || event.target instanceof HTMLTextAreaElement
+        || (event.target instanceof HTMLElement && event.target.isContentEditable)
+      ) return;
+
       if (event.key === "Escape") {
         if (pendingAtom) {
-          setPendingAtom(null);
-          setSymbol("");
-          setValidationError(null);
+          cancelPendingAtom();
+        } else if (focusedSlot && event.target instanceof Element && event.target.matches(".direction-slot")) {
+          focusTarget(`atom:${focusedSlot.parentId}`);
         } else {
           beginClose();
         }
         return;
       }
 
-      if (event.key !== "Backspace" || pendingAtom || !selectedAtomId) return;
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-      event.preventDefault();
-      setAtoms((current) => current.filter((atom) => atom.id !== selectedAtomId));
-      setBonds((current) => current.filter((bond) => bond.from !== selectedAtomId && bond.to !== selectedAtomId));
-      setSelectedAtomId((currentId) => atoms.find((atom) => atom.id !== currentId)?.id ?? null);
-      setValidationError(null);
+      if (pendingAtom) return;
+      const isCanvasTarget = event.target instanceof Element
+        && event.target.matches(".atom-node, .direction-slot, .initial-atom");
+
+      const direction = EDITOR_DIRECTIONS.find(({ key }) => `Arrow${key[0].toUpperCase()}${key.slice(1)}` === event.key);
+      if (direction) {
+        if (!isCanvasTarget) return;
+        event.preventDefault();
+        const targets: NavigationTarget[] = [
+          ...atoms.map((atom) => ({ key: `atom:${atom.id}`, kind: "atom" as const, x: atom.x, y: atom.y })),
+          ...visibleSlots.map((slot) => ({ key: slot.key, kind: "slot" as const, x: slot.x, y: slot.y })),
+        ];
+        const current = targets.find((target) => target.key === focusedTargetKey)
+          ?? targets.find((target) => target.key === `atom:${selectedAtomId}`)
+          ?? targets[0];
+        if (!current) return;
+        const next = nextNavigationTarget(current, targets, direction);
+        if (next) focusTarget(next.key);
+        return;
+      }
+
+      if (event.key === "Enter" && focusedSlot && isCanvasTarget) {
+        event.preventDefault();
+        setSelectedAtomId(focusedSlot.parentId);
+        setPendingAtom({ x: focusedSlot.x, y: focusedSlot.y, parentId: focusedSlot.parentId });
+        setSymbol("");
+        setValidationError(null);
+        return;
+      }
+
+      if (event.key === "Enter" && atoms.length === 0 && isCanvasTarget) {
+        event.preventDefault();
+        setPendingAtom({ x: 0, y: 0 });
+        setSymbol("");
+        setValidationError(null);
+        return;
+      }
+
+      if (
+        (event.key === "Backspace" || event.key === "Delete")
+        && selectedAtomId
+        && event.target instanceof Element
+        && event.target.closest(".atom-node")
+      ) {
+        event.preventDefault();
+        const remainingAtoms = atoms.filter((atom) => atom.id !== selectedAtomId);
+        const nextAtomId = remainingAtoms[0]?.id ?? null;
+        setAtoms(remainingAtoms);
+        setBonds((current) => current.filter((bond) => bond.from !== selectedAtomId && bond.to !== selectedAtomId));
+        setSelectedAtomId(nextAtomId);
+        setHoveredAtomId(null);
+        setFocusedTargetKey(nextAtomId ? `atom:${nextAtomId}` : "initial");
+        setValidationError(null);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [atoms, beginClose, pendingAtom, selectedAtomId]);
+  }, [atoms, beginClose, focusedSlot, focusedTargetKey, pendingAtom, selectedAtomId, visibleSlots]);
 
   useEffect(() => {
     if (!pendingAtom || !symbol) {
@@ -627,7 +720,13 @@ function MoleculeEditor({
     }
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      const candidate = { id: pendingAtom.atomId ?? "pending-atom", symbol, x: pendingAtom.x, y: pendingAtom.y, formalCharge: 0 };
+      const candidate = {
+        id: pendingAtom.atomId ?? "pending-atom",
+        symbol,
+        x: pendingAtom.x,
+        y: pendingAtom.y,
+        formalCharge: atoms.find((atom) => atom.id === pendingAtom.atomId)?.formalCharge ?? 0,
+      };
       const candidateAtoms = pendingAtom.atomId
         ? atoms.map((atom) => atom.id === pendingAtom.atomId ? candidate : atom)
         : [...atoms, candidate];
@@ -645,7 +744,6 @@ function MoleculeEditor({
     };
   }, [atoms, pendingAtom, symbol]);
 
-  const isOccupied = (x: number, y: number) => atoms.some((atom) => atom.x === x && atom.y === y);
   const startAtom = (candidate: PendingAtom, initialSymbol = "") => {
     setPendingAtom(candidate);
     setSymbol(initialSymbol);
@@ -686,6 +784,7 @@ function MoleculeEditor({
       setBonds((current) => [...current, { from: pendingAtom.parentId!, to: atom.id, order: 1 }]);
     }
     setSelectedAtomId(atom.id);
+    setFocusedTargetKey(`atom:${atom.id}`);
     setPendingAtom(null);
     setSymbol("");
   };
@@ -759,8 +858,20 @@ function MoleculeEditor({
                 const deltaX = toPosition.left - fromPosition.left;
                 const deltaY = toPosition.top - fromPosition.top;
                 const length = Math.hypot(deltaX, deltaY) || 1;
+                const directionX = deltaX / length;
+                const directionY = deltaY / length;
                 const normalX = -deltaY / length;
                 const normalY = deltaX / length;
+                const trimFrom = Math.abs(directionX) * (from.symbol.length * 6 + 8) + Math.abs(directionY) * 16;
+                const trimTo = Math.abs(directionX) * (to.symbol.length * 6 + 8) + Math.abs(directionY) * 16;
+                const lineStart = {
+                  x: fromPosition.left + directionX * trimFrom,
+                  y: fromPosition.top + directionY * trimFrom,
+                };
+                const lineEnd = {
+                  x: toPosition.left - directionX * trimTo,
+                  y: toPosition.top - directionY * trimTo,
+                };
                 const orderName = bond.order === 1 ? "single" : bond.order === 2 ? "double" : "triple";
                 const cycleBond = () => cycleBondOrder(bond);
                 return (
@@ -768,31 +879,35 @@ function MoleculeEditor({
                     key={`${bond.from}-${bond.to}`}
                     className="bond-control"
                     role="button"
-                    tabIndex={0}
+                    tabIndex={pendingAtom ? -1 : 0}
+                    aria-disabled={Boolean(pendingAtom)}
                     aria-label={`${orderName} bond from ${from.symbol} to ${to.symbol}. Activate to change bond order.`}
-                    onClick={cycleBond}
+                    onClick={() => {
+                      if (!pendingAtom) cycleBond();
+                    }}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
+                      if (!pendingAtom && (event.key === "Enter" || event.key === " ")) {
                         event.preventDefault();
+                        event.stopPropagation();
                         cycleBond();
                       }
                     }}
                   >
                     <line
                       className="bond-hit-area"
-                      x1={fromPosition.left}
-                      y1={fromPosition.top}
-                      x2={toPosition.left}
-                      y2={toPosition.top}
+                      x1={lineStart.x}
+                      y1={lineStart.y}
+                      x2={lineEnd.x}
+                      y2={lineEnd.y}
                     />
                     {BOND_LINE_OFFSETS[bond.order].map((offset) => (
                       <line
                         className="bond-stroke"
                         key={offset}
-                        x1={fromPosition.left + normalX * offset}
-                        y1={fromPosition.top + normalY * offset}
-                        x2={toPosition.left + normalX * offset}
-                        y2={toPosition.top + normalY * offset}
+                        x1={lineStart.x + normalX * offset}
+                        y1={lineStart.y + normalY * offset}
+                        x2={lineEnd.x + normalX * offset}
+                        y2={lineEnd.y + normalY * offset}
                       />
                     ))}
                   </g>
@@ -803,44 +918,72 @@ function MoleculeEditor({
             {atoms.filter((atom) => atom.id !== pendingAtom?.atomId).map((atom) => (
               <button
                 key={atom.id}
+                ref={registerTarget(`atom:${atom.id}`)}
                 type="button"
-                className={`atom-node${selectedAtomId === atom.id ? " atom-node--selected" : ""}`}
+                disabled={Boolean(pendingAtom)}
+                className={`atom-node${selectedAtomId === atom.id ? " atom-node--selected" : ""}${focusedTargetKey === `atom:${atom.id}` ? " atom-node--focused" : ""}`}
                 style={editorPosition(atom.x, atom.y)}
-                aria-label={`${atom.symbol} atom. Edit element and select to add a bonded atom.`}
+                aria-label={`${atom.symbol} atom${atom.formalCharge ? `, formal charge ${atom.formalCharge}` : ""}. Select to show free bonding slots; double-click to edit the element.`}
+                aria-pressed={selectedAtomId === atom.id}
                 onClick={() => {
                   setSelectedAtomId(atom.id);
-                  startAtom({ x: atom.x, y: atom.y, atomId: atom.id }, atom.symbol);
+                  setFocusedTargetKey(`atom:${atom.id}`);
+                }}
+                onDoubleClick={() => startAtom({ x: atom.x, y: atom.y, atomId: atom.id }, atom.symbol)}
+                onFocus={() => focusTarget(`atom:${atom.id}`)}
+                onPointerEnter={() => {
+                  if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
+                  setHoveredAtomId(atom.id);
+                }}
+                onPointerLeave={() => {
+                  hoverTimerRef.current = window.setTimeout(() => {
+                    setHoveredAtomId((current) => current === atom.id ? null : current);
+                  }, 140);
                 }}
               >
-                {atom.symbol}{atom.formalCharge !== 0 && <sup>{atom.formalCharge > 0 ? "+" : "−"}{Math.abs(atom.formalCharge) === 1 ? "" : Math.abs(atom.formalCharge)}</sup>}
+                <span>{atom.symbol}</span>
+                {atom.formalCharge !== 0 && (
+                  <sup style={{ "--charge-offset": `${atom.symbol.length * 6 + 3}px` } as React.CSSProperties}>
+                    {formatFormalCharge(atom.formalCharge)}
+                  </sup>
+                )}
               </button>
             ))}
 
-            {selectedAtom && !pendingAtom && directions.map((direction) => {
-              const x = selectedAtom.x + direction.x;
-              const y = selectedAtom.y + direction.y;
-              if (isOccupied(x, y)) return null;
-              return (
-                <button
-                  key={direction.label}
-                  type="button"
-                  className="direction-slot"
-                  style={editorPosition(x, y)}
-                  aria-label={`Add atom ${direction.label} ${selectedAtom.symbol}`}
-                  onClick={() => startAtom({ x, y, parentId: selectedAtom.id })}
-                >
-                  <PlusIcon />
-                </button>
-              );
-            })}
+            {slotParent && visibleSlots.map((slot) => (
+              <button
+                key={slot.key}
+                ref={registerTarget(slot.key)}
+                type="button"
+                className={`direction-slot${focusedTargetKey === slot.key ? " direction-slot--focused" : ""}`}
+                style={editorPosition(slot.x, slot.y)}
+                aria-label={`Add atom ${slot.direction.label} ${slotParent.symbol}`}
+                onClick={() => {
+                  setSelectedAtomId(slot.parentId);
+                  startAtom({ x: slot.x, y: slot.y, parentId: slot.parentId });
+                }}
+                onFocus={() => focusTarget(slot.key)}
+                onPointerEnter={() => {
+                  if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
+                  setHoveredAtomId(slot.parentId);
+                }}
+                onPointerLeave={() => {
+                  hoverTimerRef.current = window.setTimeout(() => setHoveredAtomId(null), 140);
+                }}
+              >
+                <PlusIcon />
+              </button>
+            ))}
 
             {atoms.length === 0 && !pendingAtom && (
               <button
+                ref={registerTarget("initial")}
                 type="button"
-                className="initial-atom"
+                className={`initial-atom${focusedTargetKey === "initial" ? " initial-atom--focused" : ""}`}
                 style={editorPosition(0, 0)}
                 aria-label="Add the first atom"
                 onClick={() => startAtom({ x: 0, y: 0 })}
+                onFocus={() => setFocusedTargetKey("initial")}
               >
                 <PlusIcon />
               </button>
@@ -860,10 +1003,13 @@ function MoleculeEditor({
                   aria-invalid={Boolean(validationError)}
                   aria-describedby={validationError ? "editor-validation-error" : undefined}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter") void commitAtom();
-                  }}
-                  onBlur={() => {
-                    if (symbol) void commitAtom();
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void commitAtom();
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      cancelPendingAtom();
+                    }
                   }}
                 />
                 <span>Enter to place</span>

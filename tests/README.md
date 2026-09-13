@@ -48,10 +48,10 @@ less restrictive behavior for structural skeletons. API candidates index the
 `remaining.sources` and `remaining.sinks` arrays, and all pair locations use
 reactant-side molecule/atom references.
 
-## Electron-flow presentation tests
+## Frontend presentation tests
 
-Run `node --test tests/frontend/electron_flow_layout.test.mjs` from the repository
-root with Node 22.18+ (native TypeScript stripping), then `npm run build` in
+Run `node --test tests/frontend/*.test.mjs` from the repository root with Node
+22.18+ (native TypeScript stripping), then `npm run build` in
 `src/frontend` for type checking and the production bundle.
 
 `frontend/electron_flow_layout.test.mjs` checks deterministic HBr placement,
@@ -63,3 +63,8 @@ translation-invariant centering,
 and accessible overflow bounds. Diagonal existing geometry is intentionally
 reported as unsupported; only new dashed bonds can be diagonal. These are
 presentation rules, not additional mechanism or chemical-validity tests.
+
+`frontend/molecule_editor_geometry.test.mjs` checks that editor attachment slots
+stay cardinal, occupied positions are excluded, arrow navigation is based on
+visual geometry rather than target ordering, and formal-charge labels use the
+same magnitude-before-sign convention as the electron-flow scene.
