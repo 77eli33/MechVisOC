@@ -1,3 +1,56 @@
-The project is still in a very early development/experimental stage. 
+The project is still in a very early development/experimental stage.
 
-The goal is to build a small Visualization Tool for Organic Chemistry Reaction types. The Program is suppposed to visualize Electron and Atom movements for given Reactants and Products with a selected Reaction Mechanism. It should just be a helpful tool for students to better visualize what is happening during the Reaction. The tool is not supposed to be taken as a source of truth for studying these topics, knowledge in the field is required to validate the Program's Output.
+The goal is to build a small visualization tool for organic chemistry reaction types. The program is intended to visualize electron and atom movements for given reactants and products with a selected reaction mechanism. It should be a helpful tool for students to better understand what happens during a reaction. It is not a source of truth for studying these topics; knowledge in the field is required to validate its output.
+
+Development
+-----------
+
+### One-click start in VS Code
+
+1. Open the repository folder in VS Code.
+2. Open **Run and Debug** from the left sidebar.
+3. Choose **MechVis: Start App** and press the green play button.
+
+The first launch installs any missing dependencies. It then starts the frontend and backend together and opens the app in the default browser. Stop both services with the red stop button in VS Code.
+
+Choose **MechVis: Run Checks** from the same menu to run the backend tests and frontend production build.
+
+### Terminal start
+
+The same launcher can be used outside VS Code:
+
+    ./scripts/mechvis.sh start --open
+
+Run all checks with:
+
+    ./scripts/mechvis.sh check
+
+### Manual start
+
+Install the backend dependencies:
+
+    .venv/bin/python -m pip install -r src/backend/requirements-dev.txt
+
+Start the backend from the repository root:
+
+    .venv/bin/python -m uvicorn src.backend.main:app --reload
+
+In a second terminal, start the frontend:
+
+    cd src/frontend
+    npm install
+    npm run dev
+
+Open http://127.0.0.1:5173. The frontend development server proxies `/api` requests to the backend at http://127.0.0.1:8000.
+
+### Editor charge model
+
+Draw all hydrogens explicitly. Each atom starts with formal charge zero;
+select an atom in the editor and use its formal-charge controls to enter ions.
+The molecule charge is the sum of these atom charges. Validation uses RDKit
+and never fills missing bonds by assigning charges or implicit hydrogens.
+For example, draw O–H and explicitly set O to −1 for hydroxide.
+CH3+ and CH3− retain their entered charges. Neutral CH3, isolated neutral C,
+and bare neutral C–C are rejected as unsupported open-shell input rather
+than converted to anions. Radical/spin states and nonbonding electron-pair
+counts are not yet modeled. RDKit validation is not a mechanism assignment.

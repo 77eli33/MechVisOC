@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "MechVis: Start App",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "\"${workspaceFolder}/scripts/mechvis.sh\" start --open",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "MechVis: Run Checks",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "\"${workspaceFolder}/scripts/mechvis.sh\" check",
+      "cwd": "${workspaceFolder}"
+    }
+  ]
+}

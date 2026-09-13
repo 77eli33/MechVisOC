@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main class="app-shell"><div id="review"></div></main>
+<script type="module">
+import RefreshRuntime from '/@react-refresh';
+RefreshRuntime.injectIntoGlobalHook(window);
+window.$RefreshReg$ = () => {};
+window.$RefreshSig$ = () => (type) => type;
+window.__vite_plugin_react_preamble_installed__ = true;
+</script><script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import ElectronFlow from '/src/ElectronFlow.tsx';
+import ShaderBackground from '/src/ShaderBackground.tsx';
+import '/src/styles.css';
+const fixture={"reactants": {"molecules": [{"id": "ethene", "name": "ethene", "charge": 0, "atoms": [{"id": "c1", "element": "C", "formal_charge": 0, "x": 0, "y": 0}, {"id": "c2", "element": "C", "formal_charge": 0, "x": 1, "y": 0}, {"id": "h0", "element": "H", "formal_charge": 0, "x": -1, "y": 0}, {"id": "h1", "element": "H", "formal_charge": 0, "x": 0, "y": -1}, {"id": "h2", "element": "H", "formal_charge": 0, "x": 1, "y": -1}, {"id": "h3", "element": "H", "formal_charge": 0, "x": 2, "y": 0}], "bonds": [{"atom1_id": "c1", "atom2_id": "c2", "order": 2}, {"atom1_id": "c1", "atom2_id": "h0", "order": 1}, {"atom1_id": "c1", "atom2_id": "h1", "order": 1}, {"atom1_id": "c2", "atom2_id": "h2", "order": 1}, {"atom1_id": "c2", "atom2_id": "h3", "order": 1}]}, {"id": "acid", "name": "HBr", "charge": 0, "atoms": [{"id": "h", "element": "H", "formal_charge": 0, "x": 0, "y": 1}, {"id": "br", "element": "Br", "formal_charge": 0, "x": 1, "y": 1}], "bonds": [{"atom1_id": "h", "atom2_id": "br", "order": 1}]}]}, "products": {"molecules": [{"id": "cation", "name": "cation", "charge": 1, "atoms": [{"id": "c1", "element": "C", "formal_charge": 0, "x": 0, "y": 0}, {"id": "c2", "element": "C", "formal_charge": 1, "x": 1, "y": 0}, {"id": "h0", "element": "H", "formal_charge": 0, "x": -1, "y": 0}, {"id": "h1", "element": "H", "formal_charge": 0, "x": 0, "y": -1}, {"id": "h2", "element": "H", "formal_charge": 0, "x": 1, "y": -1}, {"id": "h3", "element": "H", "formal_charge": 0, "x": 2, "y": 0}, {"id": "h", "element": "H", "formal_charge": 0, "x": 0, "y": 1}], "bonds": [{"atom1_id": "c1", "atom2_id": "c2", "order": 1}, {"atom1_id": "c1", "atom2_id": "h0", "order": 1}, {"atom1_id": "c1", "atom2_id": "h1", "order": 1}, {"atom1_id": "c2", "atom2_id": "h2", "order": 1}, {"atom1_id": "c2", "atom2_id": "h3", "order": 1}, {"atom1_id": "c1", "atom2_id": "h", "order": 1}]}, {"id": "bromide", "name": "bromide", "charge": -1, "atoms": [{"id": "br", "element": "Br", "formal_charge": -1, "x": 1, "y": 1}], "bonds": []}]}};
+const response=await fetch('/api/electron-flow',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(fixture)});
+const result=await response.json();
+const molecules=result.reactants.molecules.map(m=>({id:m.id,atoms:m.atoms.map(a=>({id:a.id,symbol:a.element,x:a.x,y:a.y,formalCharge:a.formal_charge})),bonds:m.bonds.map(b=>({from:b.atom1_id,to:b.atom2_id,order:b.order}))}));
+createRoot(document.getElementById('review')).render(React.createElement(React.Fragment,null,React.createElement(ShaderBackground),React.createElement(ElectronFlow,{molecules,flow:result.electron_flow})));
+</script></body></html>
