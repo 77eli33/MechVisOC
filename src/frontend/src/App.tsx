@@ -599,11 +599,11 @@ function MoleculeEditor({
     setValidationError(null);
   };
 
-  const startSlotEntry = (slot: (typeof visibleSlots)[number]) => {
+  const startSlotEntry = (slot: (typeof visibleSlots)[number], initialSymbol = "") => {
     setHoveredAtomId(null);
     setSelectedAtomId(slot.parentId);
     setFocusedTargetKey(slot.key);
-    startAtom({ x: slot.x, y: slot.y, parentId: slot.parentId });
+    startAtom({ x: slot.x, y: slot.y, parentId: slot.parentId }, initialSymbol);
   };
 
   const cancelPendingAtom = () => {
@@ -684,12 +684,7 @@ function MoleculeEditor({
           ?? targets[0];
         if (!current) return;
         const next = nextNavigationTarget(current, targets, direction);
-        if (next?.kind === "slot") {
-          const slot = visibleSlots.find((candidate) => candidate.key === next.key);
-          if (slot) startSlotEntry(slot);
-        } else if (next) {
-          focusTarget(next.key);
-        }
+        if (next) focusTarget(next.key);
         return;
       }
 
@@ -704,6 +699,22 @@ function MoleculeEditor({
         setPendingAtom({ x: 0, y: 0 });
         setSymbol("");
         setValidationError(null);
+        return;
+      }
+
+      if (/^[a-z]$/i.test(event.key) && isCanvasTarget) {
+        event.preventDefault();
+        const initialSymbol = normalizeSymbol(event.key);
+        if (focusedSlot) {
+          startSlotEntry(focusedSlot, initialSymbol);
+          return;
+        }
+        if (focusedAtomId) {
+          const atom = atoms.find((candidate) => candidate.id === focusedAtomId);
+          if (atom) startAtom({ x: atom.x, y: atom.y, atomId: atom.id }, initialSymbol);
+          return;
+        }
+        if (atoms.length === 0) startAtom({ x: 0, y: 0 }, initialSymbol);
         return;
       }
 
@@ -969,7 +980,7 @@ function MoleculeEditor({
                 style={editorPosition(slot.x, slot.y)}
                 aria-label={`Add atom ${slot.direction.label} ${slotParent.symbol}`}
                 onClick={() => startSlotEntry(slot)}
-                onFocus={() => startSlotEntry(slot)}
+                onFocus={() => focusTarget(slot.key)}
                 onPointerEnter={() => {
                   if (hoverTimerRef.current !== null) window.clearTimeout(hoverTimerRef.current);
                   setHoveredAtomId(slot.parentId);
@@ -990,12 +1001,6 @@ function MoleculeEditor({
                 aria-label="Add the first atom"
                 onClick={() => startAtom({ x: 0, y: 0 })}
                 onFocus={() => setFocusedTargetKey("initial")}
-                onKeyDown={(event) => {
-                  if (/^[a-z]$/i.test(event.key)) {
-                    event.preventDefault();
-                    startAtom({ x: 0, y: 0 }, normalizeSymbol(event.key));
-                  }
-                }}
               />
             )}
 
