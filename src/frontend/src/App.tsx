@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ShaderBackground from "./ShaderBackground";
+import ElectronFlow from "./ElectronFlow";
+import type { ElectronFlow as ElectronFlowData } from "./electronFlowLayout";
 
 type Side = "reactants" | "products";
 type Atom = { id: string; symbol: string; x: number; y: number; formalCharge: number };
@@ -26,7 +28,7 @@ type BondDiff = {
   added_bonds: MappedBond[];
   order_changed: BondOrderChange[];
 };
-type ReactionAnalysisResult = { bond_diffs: BondDiff };
+type ReactionAnalysisResult = { bond_diffs: BondDiff; electron_flow: ElectronFlowData };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string; atomId?: string };
 type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
@@ -199,7 +201,7 @@ function validateCompletedMolecule(molecule: Molecule): Promise<ValidationResult
 async function requestReactionAnalysis(molecules: Record<Side, Molecule[]>): Promise<ReactionAnalysisResult> {
   const reactants: ApiMoleculeCollection = { molecules: molecules.reactants.map(toApiMolecule) };
   const products: ApiMoleculeCollection = { molecules: molecules.products.map(toApiMolecule) };
-  const response = await fetch("/api/atom-mapping", {
+  const response = await fetch("/api/electron-flow", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ reactants, products }),
@@ -1024,6 +1026,7 @@ export default function App() {
           onAdd={() => setEditorState({ side: "reactants" })}
           onOpenMoleculeMenu={openMoleculeMenu}
         />
+        {analysis && <ElectronFlow molecules={molecules.reactants} flow={analysis.electron_flow} />}
         {analysis && <BondDiffsPanel diff={analysis.bond_diffs} molecules={molecules} />}
         <MoleculePanel
           side="products"

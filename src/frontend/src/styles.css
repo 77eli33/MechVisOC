@@ -1192,3 +1192,14 @@ button {
 .editor-footer .editor-validation-error {
   display: block;
 }
+
+.electron-flow-panel { min-width: 0; }
+.electron-flow-viewport { width: 100%; height: 430px; overflow: auto; margin-top: 1rem; overscroll-behavior: contain; }
+.electron-flow-scene { display: block; max-width: none; touch-action: none; }
+.electron-flow-scene line { stroke-width: 1; }
+.electron-flow-scene text { fill: white; stroke: none; font-family: "Space Mono", monospace; font-size: 20px; user-select: none; }
+.electron-flow-scene .electron-flow-charge { font-size: 13px; }
+.electron-flow-molecule { cursor: grab; }
+.electron-flow-molecule:active { cursor: grabbing; }
+.electron-flow-arrow { fill: none; stroke: white; stroke-width: 1.7; pointer-events: none; }
+.electron-flow-notice { color: var(--ink-muted); font-size: .85rem; margin-bottom: 0; }

@@ -23,6 +23,9 @@ from .chemistry.mapping import (
     sort_atoms_into_buckets,
     validate_reaction,
 )
+from .electron_flow_api import ElectronFlowResponse, serialize_electron_flow
+from .chemistry.electron_balance import classify_pair_sources_and_sinks
+from .chemistry.electron_flow import track_electron_pairs
 from .chemistry.model import Atom
 from .chemistry.validation import validate_atom_names, validate_electron_configuration
 
@@ -83,6 +86,11 @@ def backbone(request: BackboneRequest) -> BackboneResponse:
 @app.post("/api/atom-mapping", response_model=AtomMappingResponse)
 def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
     """Receive a reaction and return its element-specific atom buckets."""
+    return _mapped_reaction(request)[0]
+
+
+def _mapped_reaction(request: AtomMappingRequest):
+    """Use one chosen mapping for all downstream reaction information."""
     reactants = to_domain_reactants(request.reactants)
     products = to_domain_products(request.products)
     if not validate_reaction(reactants, products):
@@ -98,7 +106,7 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
         bond_diffs = get_bond_diffs(reactants, products, mappings)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    return AtomMappingResponse(
+    response = AtomMappingResponse(
         reactants=request.reactants,
         products=request.products,
         reactant_count=len(reactants.molecules),
@@ -113,4 +121,19 @@ def atom_mapping(request: AtomMappingRequest) -> AtomMappingResponse:
             for reactant, product in mappings.items()
         ],
         bond_diffs=bond_diffs,
+    )
+    return response, reactants, products, mappings
+
+
+@app.post("/api/electron-flow", response_model=ElectronFlowResponse)
+def electron_flow(request: AtomMappingRequest) -> ElectronFlowResponse:
+    """Analyze already editor-validated, explicit-H closed-shell molecules."""
+    response, reactants, products, mappings = _mapped_reaction(request)
+    try:
+        balance = classify_pair_sources_and_sinks(reactants, products, mappings)
+        result = track_electron_pairs(balance)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    return ElectronFlowResponse(
+        **response.model_dump(), electron_flow=serialize_electron_flow(balance, result)
     )
