@@ -4,7 +4,7 @@ from collections import deque
 from typing import Iterable
 
 from .model import Atom, Molecule
-from .rdkit_service import assign_formal_charges, is_valid_element_symbol
+from .rdkit_service import validate_formal_charges, is_valid_element_symbol, to_rdkit_molecule
 
 
 def validate_atom_names(atoms: Iterable[Atom]) -> list[str]:
@@ -42,10 +42,15 @@ def validate_molecule(molecule: Molecule) -> list[str]:
 
 def validate_electron_configuration(molecule: Molecule) -> tuple[Molecule | None, list[str]]:
     """Use RDKit to validate and normalize a completed editor molecule."""
-    errors = validate_molecule(molecule)
+    try:
+        # Check graph integrity before connectivity traverses bond endpoints.
+        to_rdkit_molecule(molecule)
+        errors = validate_molecule(molecule)
+    except ValueError as error:
+        return None, [str(error)]
     if errors:
         return None, errors
     try:
-        return assign_formal_charges(molecule), []
+        return validate_formal_charges(molecule), []
     except ValueError as error:
         return None, [str(error)]

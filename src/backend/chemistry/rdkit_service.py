@@ -97,82 +97,40 @@ def to_rdkit_molecule(molecule: Molecule) -> Chem.Mol:
     return rdkit_molecule
 
 
-def assign_formal_charges(molecule: Molecule) -> Molecule:
-    """Return a closed-shell copy of *molecule* with RDKit-valid charges.
+def validate_formal_charges(molecule: Molecule) -> Molecule:
+    """Validate explicit-H, closed-shell input without inferring atom charges.
 
-    The editor draws every hydrogen explicitly.  Disabling implicit hydrogens
-    is therefore essential: otherwise RDKit interprets a drawn O-H fragment
-    as water instead of hydroxide.  For each atom we choose the smallest
-    formal charge that RDKit accepts without radical electrons.  An octet
-    charge breaks ties (notably between carbanions and carbocations).
+    Incomplete valence must never be repaired by adding charge. Radical
+    states require a future explicit model and are currently rejected.
     """
     rdkit_molecule = to_rdkit_molecule(molecule)
     for atom in rdkit_molecule.GetAtoms():
         atom.SetNoImplicit(True)
-
-    # Reject shell overflow before probing charges so one bad atom cannot make
-    # RDKit reject every charge candidate tested for an earlier atom.
-    for atom_index, domain_atom in enumerate(molecule.atoms):
-        rdkit_atom = rdkit_molecule.GetAtomWithIdx(atom_index)
-        bond_order = round(sum(bond.GetBondTypeAsDouble() for bond in rdkit_atom.GetBonds()))
-        shell_size = 2 if rdkit_atom.GetAtomicNum() == 1 else 8
-        # Period-three and heavier elements can use RDKit-supported expanded
-        # valences; only the first two periods have a hard duet/octet ceiling.
-        if rdkit_atom.GetAtomicNum() <= 10 and bond_order * 2 > shell_size:
+        bond_order = sum(bond.GetBondTypeAsDouble() for bond in atom.GetBonds())
+        shell_size = 2 if atom.GetAtomicNum() == 1 else 8
+        if atom.GetAtomicNum() <= 10 and bond_order * 2 > shell_size:
             raise ValueError(
-                f"{domain_atom.element} atom {domain_atom.id!r} exceeds its electron shell capacity."
+                f"{atom.GetSymbol()} atom {molecule.atoms[atom.GetIdx()].id!r} "
+                "exceeds its electron shell capacity."
             )
-
-    inferred_atoms: list[Atom] = []
-    for atom_index, domain_atom in enumerate(molecule.atoms):
-        rdkit_atom = rdkit_molecule.GetAtomWithIdx(atom_index)
-        bond_order = round(sum(bond.GetBondTypeAsDouble() for bond in rdkit_atom.GetBonds()))
-        shell_size = 2 if rdkit_atom.GetAtomicNum() == 1 else 8
-        outer_electrons = _PERIODIC_TABLE.GetNOuterElecs(rdkit_atom.GetAtomicNum())
-        octet_charge = outer_electrons + bond_order - shell_size
-        candidates: list[int] = []
-
-        with rdBase.BlockLogs():
-            for formal_charge in range(-4, 5):
-                candidate = Chem.Mol(rdkit_molecule)
-                candidate_atom = candidate.GetAtomWithIdx(atom_index)
-                candidate_atom.SetFormalCharge(formal_charge)
-                candidate_atom.SetNoImplicit(True)
-                try:
-                    Chem.SanitizeMol(candidate)
-                    if candidate_atom.GetNumRadicalElectrons() == 0:
-                        candidates.append(formal_charge)
-                except (RuntimeError, ValueError):
-                    continue
-
-        if not candidates:
-            raise ValueError(
-                f"{domain_atom.element} atom {domain_atom.id!r} has an invalid electron configuration."
-            )
-
-        formal_charge = min(
-            candidates,
-            key=lambda charge: (abs(charge), charge != octet_charge, abs(charge - octet_charge)),
-        )
-        rdkit_atom.SetFormalCharge(formal_charge)
-        inferred_atoms.append(replace(domain_atom, formal_charge=formal_charge))
-
     try:
-        rdkit_molecule.UpdatePropertyCache(strict=True)
-        Chem.SanitizeMol(rdkit_molecule)
+        with rdBase.BlockLogs():
+            rdkit_molecule.UpdatePropertyCache(strict=True)
+            Chem.SanitizeMol(rdkit_molecule)
     except (RuntimeError, ValueError) as error:
         raise ValueError(f"RDKit rejected the molecule's electron configuration: {error}") from error
 
-    radicals = [atom for atom in rdkit_molecule.GetAtoms() if atom.GetNumRadicalElectrons()]
-    if radicals:
-        atom = molecule.atoms[radicals[0].GetIdx()]
-        raise ValueError(f"{atom.element} atom {atom.id!r} has an unpaired electron.")
-
-    return replace(
-        molecule,
-        atoms=inferred_atoms,
-        charge=sum(atom.formal_charge for atom in inferred_atoms),
-    )
+    for original, checked in zip(molecule.atoms, rdkit_molecule.GetAtoms()):
+        if checked.GetFormalCharge() != original.formal_charge:
+            raise ValueError("RDKit normalization would change formal charges; enter them explicitly.")
+        if checked.GetNumRadicalElectrons():
+            raise ValueError(
+                f"{original.element} atom {original.id!r} has unpaired electrons. "
+                "Draw all hydrogens and set formal charges explicitly. "
+                "Radicals are not yet supported; charges were not changed."
+            )
+    return replace(molecule, atoms=list(molecule.atoms),
+                   charge=sum(atom.formal_charge for atom in molecule.atoms))
 
 
 def from_rdkit_molecule(rdkit_molecule: Chem.Mol) -> Molecule:

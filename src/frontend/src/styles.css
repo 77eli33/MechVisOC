@@ -1164,3 +1164,31 @@ button {
     animation-iteration-count: 1 !important;
   }
 }
+
+.atom-charge-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.atom-charge-control button {
+  min-width: 32px;
+  min-height: 32px;
+  cursor: pointer;
+}
+
+.atom-node sup {
+  font-size: 0.55em;
+}
+
+.editor-footer {
+  flex-wrap: wrap;
+}
+
+.atom-charge-control {
+  pointer-events: auto;
+}
+
+.editor-footer .editor-validation-error {
+  display: block;
+}

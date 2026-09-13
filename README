@@ -42,3 +42,15 @@ In a second terminal, start the frontend:
     npm run dev
 
 Open http://127.0.0.1:5173. The frontend development server proxies `/api` requests to the backend at http://127.0.0.1:8000.
+
+### Editor charge model
+
+Draw all hydrogens explicitly. Each atom starts with formal charge zero;
+select an atom in the editor and use its formal-charge controls to enter ions.
+The molecule charge is the sum of these atom charges. Validation uses RDKit
+and never fills missing bonds by assigning charges or implicit hydrogens.
+For example, draw O–H and explicitly set O to −1 for hydroxide.
+CH3+ and CH3− retain their entered charges. Neutral CH3, isolated neutral C,
+and bare neutral C–C are rejected as unsupported open-shell input rather
+than converted to anions. Radical/spin states and nonbonding electron-pair
+counts are not yet modeled. RDKit validation is not a mechanism assignment.

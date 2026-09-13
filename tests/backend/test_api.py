@@ -71,14 +71,14 @@ def test_validate_molecule_accepts_connected_atoms() -> None:
     assert body["molecule"]["charge"] == 0
 
 
-def test_validate_molecule_infers_and_returns_hydroxide_charge() -> None:
+def test_validate_molecule_preserves_explicit_hydroxide_charge() -> None:
     response = client.post(
         "/api/validate-molecule",
         json={
             "molecule": {
                 "id": "hydroxide",
                 "atoms": [
-                    {"id": "o-1", "element": "O", "x": 0, "y": 0},
+                    {"id": "o-1", "element": "O", "formal_charge": -1, "x": 0, "y": 0},
                     {"id": "h-1", "element": "H", "x": 1, "y": 0},
                 ],
                 "bonds": [{"atom1_id": "o-1", "atom2_id": "h-1"}],

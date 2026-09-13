@@ -127,7 +127,7 @@ function toApiMolecule(molecule: Molecule): ApiMolecule {
   return {
     id: molecule.id,
     name: formatFormulaLabel(molecule.formula),
-    charge: molecule.charge,
+    charge: molecule.atoms.reduce((total, atom) => total + atom.formalCharge, 0),
     atoms: molecule.atoms.map((atom) => ({
       id: atom.id,
       element: atom.symbol,
@@ -343,14 +343,12 @@ function SideMenu({ onClose }: { onClose: () => void }) {
 function MoleculeMenu({
   menu,
   molecule,
-  onChangeCharge,
   onEdit,
   onRemove,
   onClose,
 }: {
   menu: MoleculeMenuState;
   molecule: Molecule;
-  onChangeCharge: (amount: number) => void;
   onEdit: () => void;
   onRemove: () => void;
   onClose: () => void;
@@ -383,10 +381,7 @@ function MoleculeMenu({
       <div className="molecule-menu__charge">
         <span>Charge</span>
         <strong>{molecule.charge > 0 ? "+" : ""}{molecule.charge}</strong>
-        <div>
-          <button type="button" role="menuitem" aria-label="Decrease charge" onClick={() => onChangeCharge(-1)}>−</button>
-          <button type="button" role="menuitem" aria-label="Increase charge" onClick={() => onChangeCharge(1)}>+</button>
-        </div>
+
       </div>
       <button type="button" role="menuitem" onClick={onEdit}>Edit</button>
       <button type="button" role="menuitem" className="molecule-menu__remove" onClick={onRemove}>Remove</button>
@@ -661,7 +656,7 @@ function MoleculeEditor({
       symbol,
       x: pendingAtom.x,
       y: pendingAtom.y,
-      formalCharge: 0,
+      formalCharge: atoms.find((atom) => atom.id === pendingAtom.atomId)?.formalCharge ?? 0,
     };
     const candidateAtoms = pendingAtom.atomId
       ? atoms.map((current) => current.id === pendingAtom.atomId ? atom : current)
@@ -708,7 +703,7 @@ function MoleculeEditor({
       atoms,
       bonds,
       formula: composition,
-      charge: initialMolecule?.charge ?? 0,
+      charge: atoms.reduce((total, atom) => total + atom.formalCharge, 0),
     };
     setIsValidating(true);
     setValidationError(null);
@@ -815,7 +810,7 @@ function MoleculeEditor({
                   startAtom({ x: atom.x, y: atom.y, atomId: atom.id }, atom.symbol);
                 }}
               >
-                {atom.symbol}
+                {atom.symbol}{atom.formalCharge !== 0 && <sup>{atom.formalCharge > 0 ? "+" : "−"}{Math.abs(atom.formalCharge) === 1 ? "" : Math.abs(atom.formalCharge)}</sup>}
               </button>
             ))}
 
@@ -876,6 +871,21 @@ function MoleculeEditor({
         </div>
 
         <footer className="editor-footer">
+          <span>Draw all H atoms explicitly.</span>
+          {selectedAtom && !pendingAtom && (
+            <div className="atom-charge-control">
+              <span>{selectedAtom.symbol} formal charge: {selectedAtom.formalCharge}</span>
+              {[-1, 1].map((amount) => (
+                <button type="button" key={amount} disabled={isValidating}
+                  aria-label={amount < 0 ? "Decrease atom formal charge" : "Increase atom formal charge"}
+                  onClick={() => {
+                    setAtoms((current) => current.map((atom) => atom.id === selectedAtom.id
+                      ? { ...atom, formalCharge: atom.formalCharge + amount } : atom));
+                    setValidationError(null);
+                  }}>{amount < 0 ? "−" : "+"}</button>
+              ))}
+            </div>
+          )}
           {validationError && <p className="editor-validation-error" id="editor-validation-error" role="alert">{validationError}</p>}
           <button className="done-button" type="button" disabled={atoms.length === 0 || Boolean(pendingAtom) || isValidating} onClick={() => void save()}>{isValidating ? "Checking…" : "Done"}</button>
         </footer>
@@ -919,17 +929,6 @@ export default function App() {
   const selectMolecule = (molecule: Molecule) => {
     setSelectedMoleculeId(molecule.id);
     setRunError(null);
-  };
-
-  const updateCharge = (amount: number) => {
-    if (!moleculeMenu) return;
-    setMolecules((current) => ({
-      ...current,
-      [moleculeMenu.side]: current[moleculeMenu.side].map((molecule) =>
-        molecule.id === moleculeMenu.moleculeId ? { ...molecule, charge: molecule.charge + amount } : molecule,
-      ),
-    }));
-    setAnalysis(null);
   };
 
   const removeMolecule = (side: Side, moleculeId: string) => {
@@ -979,7 +978,7 @@ export default function App() {
         additionalProperties: false,
       },
       annotations: { readOnlyHint: false, untrustedContentHint: false },
-      execute(input) {
+      async execute(input) {
         const candidate = input as { side?: unknown; elements?: unknown; charge?: unknown };
         if (candidate.side !== "reactants" && candidate.side !== "products") throw new Error("Side must be reactants or products.");
         if (!Array.isArray(candidate.elements) || candidate.elements.length === 0) throw new Error("At least one element shorthand is required.");
@@ -987,7 +986,12 @@ export default function App() {
         const elements = candidate.elements.map((value) => normalizeSymbol(String(value)));
         if (elements.some((value) => !value)) throw new Error("Each shorthand must contain one or two letters.");
         const charge = typeof candidate.charge === "number" && Number.isInteger(candidate.charge) ? candidate.charge : 0;
-        const molecule = moleculeFromSymbols(elements, charge);
+        const draft = moleculeFromSymbols(elements, charge);
+        if (charge !== 0 && draft.atoms.length > 1) throw new Error("Set charges on individual atoms in the molecule editor.");
+        draft.atoms[0].formalCharge = charge;
+        const result = await validateCompletedMolecule(draft);
+        if (!result.valid || !result.molecule) throw new Error(result.errors.join(" "));
+        const molecule = fromApiMolecule(result.molecule);
         setMolecules((current) => ({ ...current, [side]: [...current[side], molecule] }));
         setSelectedMoleculeId(molecule.id);
         setAnalysis(null);
@@ -1043,7 +1047,6 @@ export default function App() {
         <MoleculeMenu
           menu={moleculeMenu}
           molecule={selectedActionMolecule}
-          onChangeCharge={updateCharge}
           onEdit={() => {
             setEditorState({ side: moleculeMenu.side, molecule: selectedActionMolecule });
             setMoleculeMenu(null);
