@@ -971,7 +971,6 @@ function MoleculeEditor({
                   hoverTimerRef.current = window.setTimeout(() => setHoveredAtomId(null), 140);
                 }}
               >
-                <PlusIcon />
               </button>
             ))}
 
@@ -1019,7 +1018,6 @@ function MoleculeEditor({
         </div>
 
         <footer className="editor-footer">
-          <span>Draw all H atoms explicitly.</span>
           {selectedAtom && !pendingAtom && (
             <div className="atom-charge-control">
               <span>{selectedAtom.symbol} formal charge: {selectedAtom.formalCharge}</span>
