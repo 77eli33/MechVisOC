@@ -4,6 +4,7 @@ import {
   formatFormalCharge,
   freeSlots,
   nextNavigationTarget,
+  removeAtomAndDisconnectedBranches,
 } from "../../src/frontend/src/moleculeEditorGeometry.ts";
 
 test("free slots are cardinal and exclude occupied atom positions", () => {
@@ -43,4 +44,40 @@ test("formal charges use chemistry-style magnitude-before-sign labels", () => {
   assert.equal(formatFormalCharge(-1), "−");
   assert.equal(formatFormalCharge(2), "2+");
   assert.equal(formatFormalCharge(-2), "2−");
+});
+
+test("removing a bridge atom also removes branches disconnected from the established structure", () => {
+  const atoms = [
+    { id: "root", x: 0, y: 0 },
+    { id: "bridge", x: 1, y: 0 },
+    { id: "branch-a", x: 2, y: 0 },
+    { id: "branch-b", x: 2, y: 1 },
+  ];
+  const bonds = [
+    { from: "root", to: "bridge", order: 1 },
+    { from: "bridge", to: "branch-a", order: 1 },
+    { from: "bridge", to: "branch-b", order: 1 },
+  ];
+
+  assert.deepEqual(removeAtomAndDisconnectedBranches("bridge", atoms, bonds), {
+    atoms: [atoms[0]],
+    bonds: [],
+  });
+});
+
+test("removing a terminal atom preserves the connected remainder", () => {
+  const atoms = [
+    { id: "root", x: 0, y: 0 },
+    { id: "middle", x: 1, y: 0 },
+    { id: "leaf", x: 2, y: 0 },
+  ];
+  const bonds = [
+    { from: "root", to: "middle", order: 1 },
+    { from: "middle", to: "leaf", order: 1 },
+  ];
+
+  assert.deepEqual(removeAtomAndDisconnectedBranches("leaf", atoms, bonds), {
+    atoms: atoms.slice(0, 2),
+    bonds: bonds.slice(0, 1),
+  });
 });

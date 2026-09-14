@@ -7,6 +7,7 @@ import {
   formatFormalCharge,
   freeSlots,
   nextNavigationTarget,
+  removeAtomAndDisconnectedBranches,
   type NavigationTarget,
 } from "./moleculeEditorGeometry";
 import { formulaFromAtoms, type FormulaPart } from "./moleculeFormula";
@@ -737,10 +738,11 @@ function MoleculeEditor({
         && event.target.closest(".atom-node")
       ) {
         event.preventDefault();
-        const remainingAtoms = atoms.filter((atom) => atom.id !== selectedAtomId);
+        const remaining = removeAtomAndDisconnectedBranches(selectedAtomId, atoms, bonds);
+        const remainingAtoms = remaining.atoms;
         const nextAtomId = remainingAtoms[0]?.id ?? null;
         setAtoms(remainingAtoms);
-        setBonds((current) => current.filter((bond) => bond.from !== selectedAtomId && bond.to !== selectedAtomId));
+        setBonds(remaining.bonds);
         setSelectedAtomId(nextAtomId);
         setHoveredAtomId(null);
         setFocusedTargetKey(nextAtomId ? `atom:${nextAtomId}` : "initial");
@@ -749,7 +751,7 @@ function MoleculeEditor({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [atoms, beginClose, focusedSlot, focusedTargetKey, pendingAtom, selectedAtomId, visibleSlots]);
+  }, [atoms, beginClose, bonds, focusedSlot, focusedTargetKey, pendingAtom, selectedAtomId, visibleSlots]);
 
   useEffect(() => {
     if (!pendingAtom || !symbol) {

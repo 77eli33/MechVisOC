@@ -71,4 +71,6 @@ presentation rules, not additional mechanism or chemical-validity tests.
 `frontend/molecule_editor_geometry.test.mjs` checks that editor attachment slots
 stay cardinal, occupied positions are excluded, arrow navigation is based on
 visual geometry rather than target ordering, and formal-charge labels use the
-same magnitude-before-sign convention as the electron-flow scene.
+same magnitude-before-sign convention as the electron-flow scene. It also
+checks that deleting a bridge atom removes branches disconnected from the
+established structure while terminal-atom deletion preserves the remainder.

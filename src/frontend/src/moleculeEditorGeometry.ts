@@ -9,6 +9,7 @@ export const EDITOR_DIRECTIONS = [
 
 export type EditorDirection = (typeof EDITOR_DIRECTIONS)[number];
 export type PositionedAtom = EditorPoint & { id: string };
+export type EditorBond = { from: string; to: string };
 export type EditorSlot = EditorPoint & {
   key: string;
   kind: "slot";
@@ -57,4 +58,43 @@ export function formatFormalCharge(charge: number): string {
   if (charge === 0) return "";
   const magnitude = Math.abs(charge);
   return `${magnitude === 1 ? "" : magnitude}${charge > 0 ? "+" : "−"}`;
+}
+
+export function removeAtomAndDisconnectedBranches<
+  Atom extends PositionedAtom,
+  Bond extends EditorBond,
+>(atomId: string, atoms: Atom[], bonds: Bond[]): { atoms: Atom[]; bonds: Bond[] } {
+  const remainingAtoms = atoms.filter((atom) => atom.id !== atomId);
+  if (remainingAtoms.length === atoms.length) return { atoms, bonds };
+  if (remainingAtoms.length === 0) return { atoms: [], bonds: [] };
+
+  const remainingIds = new Set(remainingAtoms.map((atom) => atom.id));
+  const remainingBonds = bonds.filter(
+    (bond) => remainingIds.has(bond.from) && remainingIds.has(bond.to),
+  );
+  const neighbors = new Map(remainingAtoms.map((atom) => [atom.id, new Set<string>()]));
+  remainingBonds.forEach((bond) => {
+    neighbors.get(bond.from)?.add(bond.to);
+    neighbors.get(bond.to)?.add(bond.from);
+  });
+
+  // Atom order follows editor insertion order, so the earliest survivor is
+  // the established part of the structure and cut-off branches are discarded.
+  const connectedIds = new Set([remainingAtoms[0].id]);
+  const pendingIds = [remainingAtoms[0].id];
+  while (pendingIds.length > 0) {
+    const currentId = pendingIds.pop()!;
+    neighbors.get(currentId)?.forEach((neighborId) => {
+      if (connectedIds.has(neighborId)) return;
+      connectedIds.add(neighborId);
+      pendingIds.push(neighborId);
+    });
+  }
+
+  return {
+    atoms: remainingAtoms.filter((atom) => connectedIds.has(atom.id)),
+    bonds: remainingBonds.filter(
+      (bond) => connectedIds.has(bond.from) && connectedIds.has(bond.to),
+    ),
+  };
 }
