@@ -1,4 +1,4 @@
-"""Transport coverage for explicit-H electron flow, separate from legacy mapping."""
+"""Transport coverage for electron flow, separate from legacy mapping."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,6 +20,7 @@ def reaction_payload():
         return {"molecules": [
             {"id": m.molecule_id, "name": m.name, "charge": m.charge,
              "atoms": [{"id": a.id, "element": a.element, "formal_charge": a.formal_charge,
+                        "implicit_hydrogens": a.implicit_hydrogens,
                         "x": i, "y": 0} for i, a in enumerate(m.atoms)],
              "bonds": [{"atom1_id": b.atom1_id, "atom2_id": b.atom2_id, "order": b.order}
                        for b in m.bonds]}

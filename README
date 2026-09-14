@@ -45,12 +45,15 @@ Open http://127.0.0.1:5173. The frontend development server proxies `/api` reque
 
 ### Editor charge model
 
-Draw all hydrogens explicitly. Each atom starts with formal charge zero;
-select an atom in the editor and use its formal-charge controls to enter ions.
-The molecule charge is the sum of these atom charges. Validation uses RDKit
-and never fills missing bonds by assigning charges or implicit hydrogens.
-For example, draw O–H and explicitly set O to −1 for hydroxide.
-CH3+ and CH3− retain their entered charges. Neutral CH3, isolated neutral C,
-and bare neutral C–C are rejected as unsupported open-shell input rather
-than converted to anions. Radical/spin states and nonbonding electron-pair
-counts are not yet modeled. RDKit validation is not a mechanism assignment.
+Carbon-bound hydrogens are implicit. Editor validation infers their count from
+each carbon's explicit bond-order sum and formal charge: neutral carbon targets
+valence four, while charged carbon targets `4 - |formal charge|`. Hydrogens
+that participate explicitly at a reaction site can still be drawn so atom and
+electron movement remains mappable. Hydrogens on other elements remain
+explicit; for example, draw O–H and set O to −1 for hydroxide.
+
+Each atom starts with formal charge zero. Select an atom and use its
+formal-charge controls to enter ions; the molecule charge is the sum of those
+atom charges. Validation never fills incomplete valence by assigning charge.
+Radical/spin states and nonbonding electron-pair counts are not yet modeled.
+RDKit validation is not a mechanism assignment.

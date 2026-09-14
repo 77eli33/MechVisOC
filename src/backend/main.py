@@ -65,7 +65,10 @@ def validate_completed_molecule(request: MoleculeValidationRequest) -> MoleculeV
         update={
             "charge": molecule.charge,
             "atoms": [
-                atom.model_copy(update={"formal_charge": atoms_by_id[atom.id].formal_charge})
+                atom.model_copy(update={
+                    "formal_charge": atoms_by_id[atom.id].formal_charge,
+                    "implicit_hydrogens": atoms_by_id[atom.id].implicit_hydrogens,
+                })
                 for atom in request.molecule.atoms
             ],
         }
@@ -127,7 +130,7 @@ def _mapped_reaction(request: AtomMappingRequest):
 
 @app.post("/api/electron-flow", response_model=ElectronFlowResponse)
 def electron_flow(request: AtomMappingRequest) -> ElectronFlowResponse:
-    """Analyze already editor-validated, explicit-H closed-shell molecules."""
+    """Analyze already editor-validated, closed-shell molecules."""
     response, reactants, products, mappings = _mapped_reaction(request)
     try:
         balance = classify_pair_sources_and_sinks(reactants, products, mappings)

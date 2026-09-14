@@ -41,6 +41,16 @@ def validate_reaction(reactants: Reactants, products: Products) -> bool:
         for molecule in products.molecules
         for atom in molecule.atoms
     )
+    reactant_atoms["H"] += sum(
+        atom.implicit_hydrogens
+        for molecule in reactants.molecules
+        for atom in molecule.atoms
+    )
+    product_atoms["H"] += sum(
+        atom.implicit_hydrogens
+        for molecule in products.molecules
+        for atom in molecule.atoms
+    )
     reactant_charge = sum(molecule.charge for molecule in reactants.molecules)
     product_charge = sum(molecule.charge for molecule in products.molecules)
     return reactant_atoms == product_atoms and reactant_charge == product_charge

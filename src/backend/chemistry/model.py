@@ -11,6 +11,7 @@ class Atom:
     formal_charge: int = 0
     electron_count: int | None = None
     proton_count: int | None = None
+    implicit_hydrogens: int = 0
 
     @property
     def name(self) -> str:

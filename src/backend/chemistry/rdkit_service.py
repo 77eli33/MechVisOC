@@ -11,6 +11,7 @@ from typing import Mapping
 from rdkit import Chem
 from rdkit import rdBase
 
+from .implicit_hydrogens import infer_carbon_hydrogens
 from .model import Atom, AtomRef, Bond, Molecule, Products, Reactants
 
 
@@ -65,6 +66,9 @@ def to_rdkit_molecule(molecule: Molecule) -> Chem.Mol:
 
         rdkit_atom = Chem.Atom(atom.element)
         rdkit_atom.SetFormalCharge(atom.formal_charge)
+        if type(atom.implicit_hydrogens) is not int or atom.implicit_hydrogens < 0:
+            raise ValueError("Implicit hydrogen counts must be nonnegative integers")
+        rdkit_atom.SetNumExplicitHs(atom.implicit_hydrogens)
         rdkit_atom.SetProp(_ATOM_ID_PROPERTY, atom.id)
         rdkit_atom.SetProp(_MOLECULE_ID_PROPERTY, molecule.molecule_id)
         atom_indices[atom.id] = editable.AddAtom(rdkit_atom)
@@ -98,19 +102,23 @@ def to_rdkit_molecule(molecule: Molecule) -> Chem.Mol:
 
 
 def validate_formal_charges(molecule: Molecule) -> Molecule:
-    """Validate explicit-H, closed-shell input without inferring atom charges.
+    """Infer carbon hydrogens and validate closed-shell formal charges.
 
     Incomplete valence must never be repaired by adding charge. Radical
     states require a future explicit model and are currently rejected.
     """
-    rdkit_molecule = to_rdkit_molecule(molecule)
+    normalized_molecule = infer_carbon_hydrogens(molecule)
+    rdkit_molecule = to_rdkit_molecule(normalized_molecule)
     for atom in rdkit_molecule.GetAtoms():
         atom.SetNoImplicit(True)
-        bond_order = sum(bond.GetBondTypeAsDouble() for bond in atom.GetBonds())
+        bond_order = (
+            sum(bond.GetBondTypeAsDouble() for bond in atom.GetBonds())
+            + atom.GetNumExplicitHs()
+        )
         shell_size = 2 if atom.GetAtomicNum() == 1 else 8
         if atom.GetAtomicNum() <= 10 and bond_order * 2 > shell_size:
             raise ValueError(
-                f"{atom.GetSymbol()} atom {molecule.atoms[atom.GetIdx()].id!r} "
+                f"{atom.GetSymbol()} atom {normalized_molecule.atoms[atom.GetIdx()].id!r} "
                 "exceeds its electron shell capacity."
             )
     try:
@@ -120,17 +128,20 @@ def validate_formal_charges(molecule: Molecule) -> Molecule:
     except (RuntimeError, ValueError) as error:
         raise ValueError(f"RDKit rejected the molecule's electron configuration: {error}") from error
 
-    for original, checked in zip(molecule.atoms, rdkit_molecule.GetAtoms()):
+    for original, checked in zip(normalized_molecule.atoms, rdkit_molecule.GetAtoms()):
         if checked.GetFormalCharge() != original.formal_charge:
             raise ValueError("RDKit normalization would change formal charges; enter them explicitly.")
         if checked.GetNumRadicalElectrons():
             raise ValueError(
                 f"{original.element} atom {original.id!r} has unpaired electrons. "
-                "Draw all hydrogens and set formal charges explicitly. "
+                "Set formal charges explicitly. "
                 "Radicals are not yet supported; charges were not changed."
             )
-    return replace(molecule, atoms=list(molecule.atoms),
-                   charge=sum(atom.formal_charge for atom in molecule.atoms))
+    return replace(
+        normalized_molecule,
+        atoms=list(normalized_molecule.atoms),
+        charge=sum(atom.formal_charge for atom in normalized_molecule.atoms),
+    )
 
 
 def from_rdkit_molecule(rdkit_molecule: Chem.Mol) -> Molecule:
@@ -152,6 +163,7 @@ def from_rdkit_molecule(rdkit_molecule: Chem.Mol) -> Molecule:
             id=_required_property(atom, _ATOM_ID_PROPERTY),
             element=atom.GetSymbol(),
             formal_charge=atom.GetFormalCharge(),
+            implicit_hydrogens=atom.GetNumExplicitHs(),
         )
         for atom in rdkit_molecule.GetAtoms()
     ]

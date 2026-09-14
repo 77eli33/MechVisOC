@@ -71,6 +71,28 @@ def test_validate_molecule_accepts_connected_atoms() -> None:
     assert body["molecule"]["charge"] == 0
 
 
+def test_validate_molecule_returns_charge_aware_implicit_carbon_hydrogens() -> None:
+    response = client.post(
+        "/api/validate-molecule",
+        json={
+            "molecule": {
+                "id": "charged-carbons",
+                "atoms": [
+                    {"id": "neutral", "element": "C", "x": 0, "y": 0},
+                    {"id": "cation", "element": "C", "formal_charge": 1, "x": 1, "y": 0},
+                ],
+                "bonds": [{"atom1_id": "neutral", "atom2_id": "cation"}],
+            }
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["valid"] is True
+    assert [atom["implicit_hydrogens"] for atom in body["molecule"]["atoms"]] == [3, 2]
+    assert body["molecule"]["charge"] == 1
+
+
 def test_validate_molecule_preserves_explicit_hydroxide_charge() -> None:
     response = client.post(
         "/api/validate-molecule",
@@ -200,8 +222,8 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
         {
             **reactant,
             "atoms": [
-                {**reactant["atoms"][0], "formal_charge": 0},
-                {**reactant["atoms"][1], "formal_charge": 0},
+                {**reactant["atoms"][0], "formal_charge": 0, "implicit_hydrogens": 0},
+                {**reactant["atoms"][1], "formal_charge": 0, "implicit_hydrogens": 0},
             ],
         }
     ]
@@ -209,8 +231,8 @@ def test_atom_mapping_receives_all_reactant_and_product_molecules() -> None:
         {
             **product,
             "atoms": [
-                {**product["atoms"][0], "formal_charge": 0},
-                {**product["atoms"][1], "formal_charge": 0},
+                {**product["atoms"][0], "formal_charge": 0, "implicit_hydrogens": 0},
+                {**product["atoms"][1], "formal_charge": 0, "implicit_hydrogens": 0},
             ],
         }
     ]

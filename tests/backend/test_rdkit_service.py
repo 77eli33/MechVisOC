@@ -46,22 +46,22 @@ def test_rdkit_mapping_adapter_restores_stable_atom_references() -> None:
     }
 
 
-def test_incomplete_neutral_carbon_is_not_converted_to_an_anion() -> None:
+def test_incomplete_neutral_carbon_receives_implicit_hydrogens_without_changing_charge() -> None:
     from src.backend.chemistry.validation import validate_electron_configuration
 
-    for molecule in [
-        Molecule('c', 'C', atoms=[Atom('c', 'C')]),
-        Molecule('cc', 'CC', atoms=[Atom('c1', 'C'), Atom('c2', 'C')],
-                 bonds=[Bond('c1', 'c2')]),
+    for molecule, expected_hydrogens in [
+        (Molecule('c', 'C', atoms=[Atom('c', 'C')]), [4]),
+        (Molecule('cc', 'CC', atoms=[Atom('c1', 'C'), Atom('c2', 'C')],
+                  bonds=[Bond('c1', 'c2')]), [3, 3]),
     ]:
         validated, errors = validate_electron_configuration(molecule)
-        assert validated is None
-        assert 'unpaired electrons' in errors[0]
+        assert errors == []
+        assert [atom.implicit_hydrogens for atom in validated.atoms] == expected_hydrogens
         assert all(atom.formal_charge == 0 for atom in molecule.atoms)
         assert molecule.charge == 0
 
 
-def test_methyl_charge_states_are_preserved_and_radical_is_rejected() -> None:
+def test_methyl_charge_states_determine_implicit_hydrogen_count() -> None:
     from src.backend.chemistry.validation import validate_electron_configuration
 
     for charge in [-1, 0, 1]:
@@ -71,14 +71,34 @@ def test_methyl_charge_states_are_preserved_and_radical_is_rejected() -> None:
             bonds=[Bond('c', f'h{i}') for i in range(3)],
         )
         validated, errors = validate_electron_configuration(molecule)
-        if charge == 0:
-            assert validated is None
-            assert 'Radicals are not yet supported' in errors[0]
-        else:
-            assert errors == []
-            assert validated.charge == charge
-            assert validated.atoms == molecule.atoms
+        assert errors == []
+        assert validated.charge == charge
+        assert validated.atoms[0].implicit_hydrogens == (1 if charge == 0 else 0)
         assert molecule.charge == 99  # Validation never mutates its input.
+
+
+def test_carbon_formal_charge_controls_implicit_hydrogen_count() -> None:
+    from src.backend.chemistry.validation import validate_electron_configuration
+
+    for charge, expected in [(-2, 2), (-1, 3), (0, 4), (1, 3), (2, 2)]:
+        molecule = Molecule('carbon', 'carbon', atoms=[Atom('c', 'C', charge)])
+        validated, errors = validate_electron_configuration(molecule)
+        assert errors == []
+        assert validated.atoms[0].implicit_hydrogens == expected
+        assert validated.charge == charge
+
+
+def test_explicit_carbon_bonds_reduce_inferred_hydrogens() -> None:
+    from src.backend.chemistry.validation import validate_electron_configuration
+
+    molecule = Molecule(
+        'ethanol-skeleton', 'ethanol-skeleton',
+        atoms=[Atom('c1', 'C'), Atom('c2', 'C'), Atom('o', 'O'), Atom('oh', 'H')],
+        bonds=[Bond('c1', 'c2'), Bond('c2', 'o'), Bond('o', 'oh')],
+    )
+    validated, errors = validate_electron_configuration(molecule)
+    assert errors == []
+    assert [atom.implicit_hydrogens for atom in validated.atoms] == [3, 2, 0, 0]
 
 
 def test_neutral_oh_is_not_silently_changed_to_hydroxide() -> None:

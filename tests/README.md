@@ -5,7 +5,8 @@ Run from the repository root: `.venv/bin/python -m pytest tests/backend`.
 - `backend/test_model.py`: internal molecule data structures and editor molecule
   validation, including explicit formal charge handling.
 - `backend/test_rdkit_service.py`: RDKit adapters, identity preservation, graph
-  validation and closed-shell, explicit-H electron configuration checks.
+  validation, charge-aware carbon hydrogen inference, and closed-shell electron
+  configuration checks.
 - `backend/test_mapping.py`: reaction conservation, element-preserving atom
   mapping, canonical bond differences and bond order changes.
 - `backend/test_api.py`: API input/output contracts and validation errors.
@@ -22,15 +23,18 @@ Run from the repository root: `.venv/bin/python -m pytest tests/backend`.
 
 ## Electron-flow assumptions
 
-The new domain functions consume already validated molecules. All hydrogens
-must be explicit; radicals, aromatic/fractional bonds and transition-metal
-counting are outside this first implementation. The supported main-group
+The new domain functions consume already validated molecules. Carbon-bound
+hydrogens inferred by editor validation are stored as counts on their carbon;
+hydrogens involved explicitly at a reaction site remain ordinary mapped atoms.
+Radicals, aromatic/fractional bonds and transition-metal counting are outside
+this first implementation. The supported main-group
 symbols are explicitly listed in `electron_balance.py`. Formal lone-pair
 counting is an electron accounting identity, not a new molecule-validity or
 stability test: an even nonnegative result does not prove a closed-shell state.
-For example, a bare neutral C formally yields two pairs by this arithmetic,
-although editor validation rejects that input. Existing `Atom.electron_count`
-and `proton_count` metadata do not override element/formal-charge bookkeeping.
+For example, an unnormalized bare neutral C formally yields two pairs by this
+arithmetic, although editor validation first normalizes it to CH4. Existing
+`Atom.electron_count` and `proton_count` metadata do not override
+element/formal-charge bookkeeping.
 
 Charge differences enter only through the change of nonbonding pairs. Bond
 order changes carry their full pair count. Pair tracking consumes separately

@@ -1,8 +1,8 @@
 """Electron-pair bookkeeping, independent of arrow matching or rendering.
 
-Assumes validated, explicit-H, closed-shell molecules with integer covalent
-bond orders. This is formal Lewis bookkeeping, not an orbital/stability test.
-All locations are expressed in reactant-side atom references.
+Assumes validated, closed-shell molecules with integer covalent bond orders.
+Carbon-bound hydrogens may be implicit. This is formal Lewis bookkeeping, not
+an orbital/stability test. All locations use reactant-side atom references.
 """
 
 from dataclasses import dataclass
@@ -11,7 +11,8 @@ from .mapping import get_bond_diffs, map_atoms
 from .model import Atom, AtomRef, Products, Reactants
 
 # Main-group valence electrons only; transition-metal electron counting needs
-# a different model. No toolkit molecule or implicit hydrogen inference here.
+# a different model. No toolkit molecule or hydrogen inference happens here;
+# the validator stores inferred carbon hydrogen counts in the domain atoms.
 _VALENCE_ELECTRONS = {
     "H": 1, "He": 2,
     "Li": 1, "Be": 2, "B": 3, "C": 4, "N": 5, "O": 6, "F": 7, "Ne": 8,
@@ -49,19 +50,27 @@ def count_lone_pairs(atom: Atom, bond_order_sum: int) -> int:
     """Count formal pairs in already validated closed-shell input.
 
     Even/nonnegative arithmetic alone cannot establish a closed-shell state
-    (bare neutral C is a counterexample); this does not replace editor checks.
+    (an unnormalized bare neutral C is a counterexample); this does not replace
+    editor validation and its implicit-hydrogen normalization.
     """
     if type(bond_order_sum) is not int or bond_order_sum < 0:
         raise ValueError("Bond order sum must be a nonnegative integer")
     if type(atom.formal_charge) is not int:
         raise ValueError("Formal charge must be an integer")
+    if type(atom.implicit_hydrogens) is not int or atom.implicit_hydrogens < 0:
+        raise ValueError("Implicit hydrogen counts must be nonnegative integers")
     if atom.element not in _VALENCE_ELECTRONS:
         raise ValueError(f"Unsupported element for electron-pair counting: {atom.element!r}")
-    electrons = _VALENCE_ELECTRONS[atom.element] - atom.formal_charge - bond_order_sum
+    electrons = (
+        _VALENCE_ELECTRONS[atom.element]
+        - atom.formal_charge
+        - bond_order_sum
+        - atom.implicit_hydrogens
+    )
     if electrons < 0 or electrons % 2:
         raise ValueError(
             f"Atom {atom.id!r} has negative or odd nonbonding electron count; "
-            "only explicit-H closed-shell states are supported"
+            "only closed-shell states are supported"
         )
     return electrons // 2
 

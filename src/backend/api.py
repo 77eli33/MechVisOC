@@ -14,6 +14,7 @@ class AtomPayload(BaseModel):
     x: int
     y: int
     formal_charge: int = 0
+    implicit_hydrogens: int = Field(default=0, ge=0)
 
     @field_validator("element")
     @classmethod
@@ -161,7 +162,14 @@ def to_domain_molecule(payload: MoleculePayload) -> Molecule:
 
     molecule = Molecule(payload.id, payload.name, payload.charge)
     for atom in payload.atoms:
-        molecule.add_atom(Atom(atom.id, atom.element, atom.formal_charge))
+        molecule.add_atom(
+            Atom(
+                atom.id,
+                atom.element,
+                atom.formal_charge,
+                implicit_hydrogens=atom.implicit_hydrogens,
+            )
+        )
     for bond in payload.bonds:
         molecule.add_bond(Bond(bond.atom1_id, bond.atom2_id, bond.order))
     return molecule

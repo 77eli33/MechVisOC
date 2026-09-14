@@ -1,4 +1,4 @@
-"""Explicit-H, closed-shell bookkeeping and conservative structural tracking."""
+"""Closed-shell bookkeeping and conservative structural tracking."""
 
 import pytest
 
@@ -19,6 +19,10 @@ def site(*atoms, count=1):
 ])
 def test_lone_pairs(element, charge, orders, expected):
     assert count_lone_pairs(Atom("a", element, charge), orders) == expected
+
+
+def test_implicit_carbon_hydrogens_contribute_bonding_electrons():
+    assert count_lone_pairs(Atom("c", "C", implicit_hydrogens=4), 0) == 0
 
 
 @pytest.mark.parametrize("atom,orders", [

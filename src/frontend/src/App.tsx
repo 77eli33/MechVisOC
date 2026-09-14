@@ -9,12 +9,19 @@ import {
   nextNavigationTarget,
   type NavigationTarget,
 } from "./moleculeEditorGeometry";
+import { formulaFromAtoms, type FormulaPart } from "./moleculeFormula";
 
 type Side = "reactants" | "products";
-type Atom = { id: string; symbol: string; x: number; y: number; formalCharge: number };
+type Atom = {
+  id: string;
+  symbol: string;
+  x: number;
+  y: number;
+  formalCharge: number;
+  implicitHydrogens: number;
+};
 type BondOrder = 1 | 2 | 3;
 type Bond = { from: string; to: string; order: BondOrder };
-type FormulaPart = { symbol: string; count: number };
 type Molecule = {
   id: string;
   atoms: Atom[];
@@ -44,7 +51,14 @@ type ApiMolecule = {
   id: string;
   name: string;
   charge: number;
-  atoms: Array<{ id: string; element: string; x: number; y: number; formal_charge: number }>;
+  atoms: Array<{
+    id: string;
+    element: string;
+    x: number;
+    y: number;
+    formal_charge: number;
+    implicit_hydrogens: number;
+  }>;
   bonds: Array<{ atom1_id: string; atom2_id: string; order: number }>;
 };
 type ApiMoleculeCollection = { molecules: ApiMolecule[] };
@@ -108,14 +122,10 @@ function normalizeSymbol(value: string) {
   return letters ? letters[0].toUpperCase() + letters.slice(1).toLowerCase() : "";
 }
 
-function formulaFromAtoms(atoms: Atom[]) {
-  const counts = new Map<string, number>();
-  atoms.forEach((atom) => counts.set(atom.symbol, (counts.get(atom.symbol) ?? 0) + 1));
-  return Array.from(counts, ([symbol, count]) => ({ symbol, count }));
-}
-
 function moleculeFromSymbols(symbols: string[], charge = 0): Molecule {
-  const atoms = symbols.map((symbol, index) => ({ id: crypto.randomUUID(), symbol, x: index, y: 0, formalCharge: 0 }));
+  const atoms = symbols.map((symbol, index) => ({
+    id: crypto.randomUUID(), symbol, x: index, y: 0, formalCharge: 0, implicitHydrogens: 0,
+  }));
   return {
     id: crypto.randomUUID(),
     atoms,
@@ -136,6 +146,7 @@ function toApiMolecule(molecule: Molecule): ApiMolecule {
       x: atom.x,
       y: atom.y,
       formal_charge: atom.formalCharge,
+      implicit_hydrogens: atom.implicitHydrogens,
     })),
     bonds: molecule.bonds.map((bond) => ({ atom1_id: bond.from, atom2_id: bond.to, order: bond.order })),
   };
@@ -148,6 +159,7 @@ function fromApiMolecule(molecule: ApiMolecule): Molecule {
     x: atom.x,
     y: atom.y,
     formalCharge: atom.formal_charge,
+    implicitHydrogens: atom.implicit_hydrogens,
   }));
   return {
     id: molecule.id,
@@ -752,6 +764,7 @@ function MoleculeEditor({
         x: pendingAtom.x,
         y: pendingAtom.y,
         formalCharge: atoms.find((atom) => atom.id === pendingAtom.atomId)?.formalCharge ?? 0,
+        implicitHydrogens: 0,
       };
       const candidateAtoms = pendingAtom.atomId
         ? atoms.map((atom) => atom.id === pendingAtom.atomId ? candidate : atom)
@@ -778,6 +791,7 @@ function MoleculeEditor({
       x: pendingAtom.x,
       y: pendingAtom.y,
       formalCharge: atoms.find((atom) => atom.id === pendingAtom.atomId)?.formalCharge ?? 0,
+      implicitHydrogens: 0,
     };
     const candidateAtoms = pendingAtom.atomId
       ? atoms.map((current) => current.id === pendingAtom.atomId ? atom : current)
