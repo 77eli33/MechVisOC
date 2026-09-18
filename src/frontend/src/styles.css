@@ -347,126 +347,6 @@ button {
   animation: result-in 300ms ease-out both;
 }
 
-.bond-diffs-panel {
-  min-height: 22rem;
-  border-color: rgba(190, 243, 235, 0.28);
-  animation: result-in 300ms ease-out both;
-}
-
-.bond-diffs-empty {
-  margin-top: 1.5rem;
-  color: var(--ink-muted);
-}
-
-.bond-diff-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
-  gap: 1rem;
-  margin-top: 1.5rem;
-}
-
-.bond-diff-group {
-  display: grid;
-  align-content: start;
-  gap: 0.65rem;
-  min-width: 0;
-}
-
-.bond-diff-group h3,
-.bond-diff-group > p {
-  margin: 0;
-}
-
-.bond-diff-group h3 {
-  padding-bottom: 0.35rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--ink-muted);
-  font-size: 0.85rem;
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.bond-diff-group--removed h3 {
-  color: #ff9d91;
-}
-
-.bond-diff-group--added h3 {
-  color: #83e7be;
-}
-
-.bond-diff-group--order h3 {
-  color: #f4ce78;
-}
-
-.bond-diff-group > p {
-  color: var(--ink-muted);
-  font-size: 0.8rem;
-}
-
-.bond-change-card {
-  display: grid;
-  gap: 0.55rem;
-  min-width: 0;
-  padding: 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-left-width: 3px;
-  border-radius: 0.35rem;
-  background: rgba(35, 50, 52, 0.32);
-}
-
-.bond-change-card--removed {
-  border-left-color: #ff9d91;
-}
-
-.bond-change-card--added {
-  border-left-color: #83e7be;
-}
-
-.bond-change-card--order {
-  border-left-color: #f4ce78;
-}
-
-.bond-change-card__bond {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.bond-change-card__bond strong {
-  color: #b9f4ea;
-  font: 600 1.25rem/1 "Space Mono", monospace;
-}
-
-.bond-change-card__bond i {
-  min-width: 2rem;
-  color: rgba(255, 255, 255, 0.78);
-  font: normal 400 1.2rem/1 "Space Mono", monospace;
-  text-align: center;
-}
-
-.bond-change-card--order .bond-change-card__bond i {
-  min-width: 5rem;
-  font-size: 0.92rem;
-}
-
-.bond-change-card > span {
-  color: var(--ink-muted);
-  font-size: 0.78rem;
-}
-
-.bond-change-card__refs {
-  display: grid;
-  gap: 0.18rem;
-}
-
-.bond-change-card__refs code {
-  overflow-wrap: anywhere;
-  color: rgba(233, 255, 251, 0.72);
-  font-family: "Space Mono", monospace;
-  font-size: 0.68rem;
-}
-
 @keyframes result-in {
   from {
     opacity: 0;
@@ -1120,10 +1000,6 @@ button {
   .molecule-row {
     gap: 2.2rem;
     padding-inline: 0.4rem;
-  }
-
-  .bond-diff-groups {
-    grid-template-columns: 1fr;
   }
 
   .editor-dialog {

@@ -30,20 +30,7 @@ type Molecule = {
   formula: FormulaPart[];
   charge: number;
 };
-type BucketAtom = { molecule_id: string; atom_id: string };
-type MappedBond = { atom1: BucketAtom; atom2: BucketAtom; order: BondOrder };
-type BondOrderChange = {
-  atom1: BucketAtom;
-  atom2: BucketAtom;
-  old_order: BondOrder;
-  new_order: BondOrder;
-};
-type BondDiff = {
-  removed_bonds: MappedBond[];
-  added_bonds: MappedBond[];
-  order_changed: BondOrderChange[];
-};
-type ReactionAnalysisResult = { bond_diffs: BondDiff; electron_flow: ElectronFlowData };
+type ReactionAnalysisResult = { electron_flow: ElectronFlowData };
 type BackboneAnalysis = { molecule: Molecule; backboneAtomIds: string[] };
 type PendingAtom = { x: number; y: number; parentId?: string; atomId?: string };
 type MoleculeMenuState = { side: Side; moleculeId: string; x: number; y: number };
@@ -472,84 +459,6 @@ function BackbonePanel({ analysis }: { analysis: BackboneAnalysis }) {
       </header>
       <MoleculeStructure analysis={analysis} />
       <div className="backbone-legend"><i aria-hidden="true" /> Highlighted backbone</div>
-    </section>
-  );
-}
-
-function BondDiffsPanel({ diff, molecules }: { diff: BondDiff; molecules: Record<Side, Molecule[]> }) {
-  const atomSymbols = new Map(
-    [...molecules.reactants, ...molecules.products].flatMap((molecule) =>
-      molecule.atoms.map((atom) => [`${molecule.id}:${atom.id}`, atom.symbol] as const),
-    ),
-  );
-  const atomSymbol = (atom: BucketAtom) => atomSymbols.get(`${atom.molecule_id}:${atom.atom_id}`) ?? "?";
-  const bondOrderLabel = (order: BondOrder) => order === 1 ? "Single" : order === 2 ? "Double" : "Triple";
-  const bondGlyph = (order: BondOrder) => order === 1 ? "—" : order === 2 ? "═" : "≡";
-  const changeCount = diff.removed_bonds.length + diff.added_bonds.length + diff.order_changed.length;
-  const renderBonds = (bonds: MappedBond[], change: "removed" | "added") => (
-    bonds.length === 0 ? <p>None</p> : bonds.map((bond) => (
-      <article
-        className={`bond-change-card bond-change-card--${change}`}
-        key={`${bond.atom1.molecule_id}:${bond.atom1.atom_id}:${bond.atom2.molecule_id}:${bond.atom2.atom_id}:${bond.order}`}
-      >
-        <div className="bond-change-card__bond">
-          <strong>{atomSymbol(bond.atom1)}</strong>
-          <i aria-label={`${bondOrderLabel(bond.order)} bond`}>{bondGlyph(bond.order)}</i>
-          <strong>{atomSymbol(bond.atom2)}</strong>
-        </div>
-        <span>{bondOrderLabel(bond.order)} bond</span>
-        <div className="bond-change-card__refs">
-          <code>{bond.atom1.molecule_id} / {bond.atom1.atom_id}</code>
-          <code>{bond.atom2.molecule_id} / {bond.atom2.atom_id}</code>
-        </div>
-      </article>
-    ))
-  );
-  const renderOrderChanges = () => (
-    diff.order_changed.length === 0 ? <p>None</p> : diff.order_changed.map((bond) => (
-      <article
-        className="bond-change-card bond-change-card--order"
-        key={`${bond.atom1.molecule_id}:${bond.atom1.atom_id}:${bond.atom2.molecule_id}:${bond.atom2.atom_id}`}
-      >
-        <div className="bond-change-card__bond">
-          <strong>{atomSymbol(bond.atom1)}</strong>
-          <i aria-label={`${bondOrderLabel(bond.old_order)} bond changed to ${bondOrderLabel(bond.new_order)} bond`}>
-            {bondGlyph(bond.old_order)} → {bondGlyph(bond.new_order)}
-          </i>
-          <strong>{atomSymbol(bond.atom2)}</strong>
-        </div>
-        <span>{bondOrderLabel(bond.old_order)} → {bondOrderLabel(bond.new_order)} bond</span>
-        <div className="bond-change-card__refs">
-          <code>{bond.atom1.molecule_id} / {bond.atom1.atom_id}</code>
-          <code>{bond.atom2.molecule_id} / {bond.atom2.atom_id}</code>
-        </div>
-      </article>
-    ))
-  );
-  return (
-    <section className="molecule-panel bond-diffs-panel" aria-labelledby="bond-diffs-title">
-      <header className="panel-heading">
-        <h2 id="bond-diffs-title">Bond changes</h2>
-        <span>{changeCount} {changeCount === 1 ? "change" : "changes"}</span>
-      </header>
-      {changeCount === 0 ? (
-        <p className="bond-diffs-empty">No bond changes found.</p>
-      ) : (
-        <div className="bond-diff-groups">
-          <section className="bond-diff-group bond-diff-group--removed">
-            <h3>Removed</h3>
-            {renderBonds(diff.removed_bonds, "removed")}
-          </section>
-          <section className="bond-diff-group bond-diff-group--added">
-            <h3>Added</h3>
-            {renderBonds(diff.added_bonds, "added")}
-          </section>
-          <section className="bond-diff-group bond-diff-group--order">
-            <h3>Order changed</h3>
-            {renderOrderChanges()}
-          </section>
-        </div>
-      )}
     </section>
   );
 }
@@ -1203,7 +1112,6 @@ export default function App() {
           onOpenMoleculeMenu={openMoleculeMenu}
         />
         {analysis && <ElectronFlow molecules={molecules.reactants} flow={analysis.electron_flow} />}
-        {analysis && <BondDiffsPanel diff={analysis.bond_diffs} molecules={molecules} />}
         <MoleculePanel
           side="products"
           title="Products"
